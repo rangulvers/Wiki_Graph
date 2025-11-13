@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wikipedia Connection Finder</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+</head>
+<body>
+    <div id="particles-js"></div>
+    <div class="container">
+        <header>
+            <h1>Wikipedia Connection Finder</h1>
+            <p class="subtitle">Find the shortest path between any two Wikipedia topics</p>
+        </header>
+
+        <div class="search-container">
+            <div class="input-group">
+                <div class="input-wrapper">
+                    <label for="start-term">Start Term</label>
+                    <input type="text" id="start-term" placeholder="e.g., Harry Potter" autocomplete="off">
+                    <div id="start-suggestions" class="autocomplete-dropdown hidden"></div>
+                </div>
+                <div class="arrow">→</div>
+                <div class="input-wrapper">
+                    <label for="end-term">End Term</label>
+                    <input type="text" id="end-term" placeholder="e.g., NBA" autocomplete="off">
+                    <div id="end-suggestions" class="autocomplete-dropdown hidden"></div>
+                </div>
+            </div>
+            <button id="find-btn" onclick="findConnection()">Find Connection</button>
+        </div>
+
+        <div id="loading" class="loading hidden">
+            <canvas id="live-search-canvas"></canvas>
+            <div class="live-search-overlay">
+                <p class="search-title">Searching Wikipedia...</p>
+                <div id="live-status" class="live-status">
+                    <div class="stat-row">
+                        <span class="stat-label">Forward:</span>
+                        <strong id="live-forward-depth">0</strong>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Backward:</span>
+                        <strong id="live-backward-depth">0</strong>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Total:</span>
+                        <strong id="live-depth">0</strong>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Pages:</span>
+                        <strong id="live-pages">0</strong>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Speed:</span>
+                        <strong id="live-speed">0</strong> <span class="stat-unit">pages/sec</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results overlay (shown after animation completes) -->
+            <div id="results" class="results hidden">
+                <!-- Stats overlay on canvas -->
+                <div id="results-stats-overlay" class="stats-overlay">
+                    <div class="stat-item">
+                        <div class="stat-value" id="hops-count">0</div>
+                        <div class="stat-label">Hops</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="pages-count">0</div>
+                        <div class="stat-label">Pages Checked</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Path details panel (below canvas) -->
+        <div id="path-details-container" class="path-details-panel hidden">
+            <h3>Path Details</h3>
+            <div id="path-details" class="path-list"></div>
+            <button id="new-search-btn" onclick="location.reload()">New Search</button>
+        </div>
+
+        <div id="error" class="error hidden"></div>
+
+        <div class="history-section">
+            <div class="history-header">
+                <h2>Search History</h2>
+                <div class="history-controls">
+                    <input type="text" id="history-search" placeholder="Filter searches..." />
+                    <button onclick="loadSearchHistory()">Refresh</button>
+                </div>
+            </div>
+
+            <div id="history-loading" class="loading hidden">
+                <div class="spinner"></div>
+                <p>Loading history...</p>
+            </div>
+
+            <div id="history-list" class="history-list"></div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
