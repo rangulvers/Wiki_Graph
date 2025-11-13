@@ -1,5 +1,6 @@
 import sqlite3
 import json
+import time
 from datetime import datetime
 from contextlib import contextmanager
 
@@ -7,8 +8,9 @@ DATABASE_NAME = 'wikipedia_searches.db'
 
 @contextmanager
 def get_db():
-    """Context manager for database connections"""
-    conn = sqlite3.connect(DATABASE_NAME)
+    """Context manager for database connections with proper timeout"""
+    # Set timeout to 20 seconds to handle concurrent writes better
+    conn = sqlite3.connect(DATABASE_NAME, timeout=20.0)
     conn.row_factory = sqlite3.Row
     try:
         yield conn
@@ -20,9 +22,21 @@ def get_db():
         conn.close()
 
 def init_db():
-    """Initialize the database with required tables"""
+    """Initialize the database with required tables and enable WAL mode"""
     with get_db() as conn:
         cursor = conn.cursor()
+
+        # Enable WAL (Write-Ahead Logging) mode for better concurrency
+        # This allows multiple readers while a writer is active
+        cursor.execute('PRAGMA journal_mode=WAL')
+
+        # Set busy timeout to 20 seconds (20000 milliseconds)
+        # This prevents immediate SQLITE_BUSY errors under load
+        cursor.execute('PRAGMA busy_timeout=20000')
+
+        # Enable foreign keys for data integrity
+        cursor.execute('PRAGMA foreign_keys=ON')
+
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS searches (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,21 +62,61 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_created_at ON searches(created_at DESC)
         ''')
 
-def save_search(start_term, end_term, path, hops, pages_checked, success, error_message=None):
-    """Save a search result to the database"""
-    with get_db() as conn:
-        cursor = conn.cursor()
+def save_search(start_term, end_term, path, hops, pages_checked, success, error_message=None, max_retries=3):
+    """
+    Save a search result to the database with retry logic for concurrent write handling
 
-        # Convert path list to JSON string
-        path_json = json.dumps(path) if path else None
+    Args:
+        start_term: Starting Wikipedia term
+        end_term: Target Wikipedia term
+        path: List of pages in the path
+        hops: Number of hops in the path
+        pages_checked: Total pages explored
+        success: Whether the search was successful
+        error_message: Optional error message
+        max_retries: Maximum number of retry attempts (default: 3)
 
-        cursor.execute('''
-            INSERT INTO searches
-            (start_term, end_term, path, hops, pages_checked, success, error_message)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (start_term, end_term, path_json, hops, pages_checked, 1 if success else 0, error_message))
+    Returns:
+        int: The ID of the inserted search record
 
-        return cursor.lastrowid
+    Raises:
+        sqlite3.OperationalError: If database remains locked after all retries
+    """
+    last_exception = None
+
+    for attempt in range(max_retries):
+        try:
+            with get_db() as conn:
+                cursor = conn.cursor()
+
+                # Convert path list to JSON string
+                path_json = json.dumps(path) if path else None
+
+                cursor.execute('''
+                    INSERT INTO searches
+                    (start_term, end_term, path, hops, pages_checked, success, error_message)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (start_term, end_term, path_json, hops, pages_checked, 1 if success else 0, error_message))
+
+                return cursor.lastrowid
+
+        except sqlite3.OperationalError as e:
+            last_exception = e
+            # Check if it's a lock/busy error
+            error_str = str(e).lower()
+            if 'locked' in error_str or 'busy' in error_str:
+                if attempt < max_retries - 1:
+                    # Exponential backoff: 0.1s, 0.2s, 0.4s
+                    sleep_time = 0.1 * (2 ** attempt)
+                    print(f"Database locked, retrying in {sleep_time}s (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(sleep_time)
+                    continue
+            # If not a lock error, or last attempt, raise immediately
+            raise
+
+    # If we exhausted all retries, raise the last exception
+    if last_exception:
+        raise last_exception
 
 def get_all_searches(search_query=None, limit=100, offset=0):
     """Get all searches with optional filtering"""

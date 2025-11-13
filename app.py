@@ -1,32 +1,210 @@
-from flask import Flask, render_template, jsonify, request, Response, stream_with_context
-from flask_cors import CORS
-import requests
+from fastapi import FastAPI, Request, Query
+from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+import httpx
 from collections import deque
-from urllib.parse import unquote
 import time
 import json
 import database
-from queue import Queue, Empty
-import threading
+import asyncio
+import re
+from typing import Optional, TypeVar, Callable, Any
+from functools import wraps
+import logging
+from models import (
+    SearchRequest, SearchResponse, SearchErrorResponse,
+    Node, Edge
+)
 
-app = Flask(__name__)
-CORS(app)
+# Type variable for generic async function decorator
+T = TypeVar('T')
+
+# Configure structured logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
+
+logger = logging.getLogger(__name__)
+
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
+
+app = FastAPI(title="Wikipedia Path Finder API", version="1.0.0")
+
+# Add rate limit exception handler
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# CORS middleware - restrict to specific origins
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "https://wikigraph-production.up.railway.app"
+    ],
+    allow_credentials=True,
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
+
+# Templates
+templates = Jinja2Templates(directory="templates")
 
 # Initialize database on startup
 database.init_db()
+
+# Retry decorator for API calls
+def retry_on_failure(max_retries: int = 3, backoff_factor: float = 0.5):
+    """
+    Decorator to retry async functions on transient failures
+
+    Args:
+        max_retries: Maximum number of retry attempts (default: 3)
+        backoff_factor: Multiplier for exponential backoff (default: 0.5)
+
+    Retries on:
+    - httpx.TimeoutException (network timeouts)
+    - httpx.ConnectError (connection failures)
+    - httpx.ReadError (read failures)
+
+    Does NOT retry on:
+    - httpx.HTTPStatusError (4xx, 5xx responses)
+    - Other exceptions
+    """
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            last_exception = None
+
+            for attempt in range(max_retries):
+                try:
+                    return await func(*args, **kwargs)
+
+                except (httpx.TimeoutException, httpx.ConnectError, httpx.ReadError) as e:
+                    last_exception = e
+
+                    if attempt < max_retries - 1:
+                        # Exponential backoff: 0.5s, 1s, 2s
+                        sleep_time = backoff_factor * (2 ** attempt)
+                        logger.warning(
+                            f"API call failed, retrying",
+                            extra={
+                                "error_type": type(e).__name__,
+                                "retry_delay": sleep_time,
+                                "attempt": attempt + 1,
+                                "max_retries": max_retries
+                            }
+                        )
+                        await asyncio.sleep(sleep_time)
+                        continue
+
+                    # Last attempt failed
+                    logger.error(f"API call failed after {max_retries} attempts", extra={"error": str(e)})
+                    raise
+
+                except Exception as e:
+                    # Don't retry on other exceptions (like HTTP errors)
+                    raise
+
+            # If we somehow exit the loop without returning or raising
+            if last_exception:
+                raise last_exception
+
+        return wrapper
+    return decorator
+
+
+# Shared HTTP client for all requests (connection pooling)
+_shared_http_client: Optional[httpx.AsyncClient] = None
+
+async def get_shared_http_client() -> httpx.AsyncClient:
+    """
+    Get or create the shared HTTP client for Wikipedia API requests.
+
+    This client is shared across all requests for efficient connection pooling
+    and reuse. It's configured with:
+    - Granular timeouts (connect, read, write, pool)
+    - Connection limits (max 100 connections, 20 keepalive)
+    - Proper User-Agent header for Wikipedia
+
+    Returns:
+        httpx.AsyncClient: The shared HTTP client instance
+    """
+    global _shared_http_client
+
+    if _shared_http_client is None:
+        # Configure timeouts with granular control
+        timeout = httpx.Timeout(
+            connect=5.0,   # Time to establish connection
+            read=30.0,     # Time to read response (Wikipedia can be slow)
+            write=5.0,     # Time to send request
+            pool=5.0       # Time to acquire connection from pool
+        )
+
+        # Configure connection pooling limits
+        limits = httpx.Limits(
+            max_connections=100,        # Max total connections
+            max_keepalive_connections=20  # Max idle connections to keep alive
+        )
+
+        # Create shared client with proper configuration
+        _shared_http_client = httpx.AsyncClient(
+            timeout=timeout,
+            limits=limits,
+            headers={
+                'User-Agent': 'WikipediaConnectionFinder/1.0 (Educational Project)'
+            }
+            # Note: HTTP/2 disabled - requires httpx[http2] package
+            # Connection pooling provides the main performance benefits
+        )
+
+    return _shared_http_client
+
+
+@app.on_event("shutdown")
+async def shutdown_http_client():
+    """Cleanup: Close the shared HTTP client on application shutdown"""
+    global _shared_http_client
+    if _shared_http_client is not None:
+        await _shared_http_client.aclose()
+        _shared_http_client = None
+
 
 class WikipediaPathFinder:
     def __init__(self, max_depth=6):
         self.max_depth = max_depth
         self.visited = set()
-        self.session = requests.Session()
-        # Wikipedia requires a User-Agent
-        self.session.headers.update({
-            'User-Agent': 'WikipediaConnectionFinder/1.0 (Educational Project)'
-        })
+        self.client = None
 
-    def get_wikipedia_links(self, page_title):
-        """Get all links from a Wikipedia page (forward direction)"""
+    async def __aenter__(self):
+        """Async context manager entry - get shared HTTP client"""
+        self.client = await get_shared_http_client()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """
+        Async context manager exit
+
+        Note: We don't close the client here since it's shared across requests.
+        The client is closed on application shutdown.
+        """
+        # Don't close shared client - just clear reference
+        self.client = None
+        return False
+
+    @retry_on_failure(max_retries=3, backoff_factor=0.5)
+    async def get_wikipedia_links(self, page_title):
+        """Get all links from a Wikipedia page (forward direction) with retry logic"""
         url = "https://en.wikipedia.org/w/api.php"
         params = {
             "action": "query",
@@ -39,7 +217,7 @@ class WikipediaPathFinder:
         }
 
         try:
-            response = self.session.get(url, params=params, timeout=10)
+            response = await self.client.get(url, params=params)
             response.raise_for_status()  # Raise error for bad status codes
 
             data = response.json()
@@ -60,7 +238,7 @@ class WikipediaPathFinder:
             links = page_data.get("links", [])
             return [link["title"] for link in links]
 
-        except requests.exceptions.RequestException as e:
+        except httpx.HTTPError as e:
             print(f"Request error fetching links for {page_title}: {e}")
             return []
         except ValueError as e:
@@ -70,8 +248,9 @@ class WikipediaPathFinder:
             print(f"Unexpected error fetching links for {page_title}: {e}")
             return []
 
-    def get_wikipedia_backlinks(self, page_title, limit=500):
-        """Get all pages that link TO a Wikipedia page (backward direction)"""
+    @retry_on_failure(max_retries=3, backoff_factor=0.5)
+    async def get_wikipedia_backlinks(self, page_title, limit=500):
+        """Get all pages that link TO a Wikipedia page (backward direction) with retry logic"""
         url = "https://en.wikipedia.org/w/api.php"
         params = {
             "action": "query",
@@ -84,7 +263,7 @@ class WikipediaPathFinder:
         }
 
         try:
-            response = self.session.get(url, params=params, timeout=10)
+            response = await self.client.get(url, params=params)
             response.raise_for_status()
 
             data = response.json()
@@ -97,7 +276,7 @@ class WikipediaPathFinder:
 
             return [link["title"] for link in backlinks[:limit]]
 
-        except requests.exceptions.RequestException as e:
+        except httpx.HTTPError as e:
             print(f"Request error fetching backlinks for {page_title}: {e}")
             return []
         except ValueError as e:
@@ -111,8 +290,9 @@ class WikipediaPathFinder:
         """Normalize Wikipedia title for comparison"""
         return title.strip().replace("_", " ").lower()
 
-    def resolve_wikipedia_title(self, search_term):
-        """Resolve a search term to an actual Wikipedia article title using search API"""
+    @retry_on_failure(max_retries=3, backoff_factor=0.5)
+    async def resolve_wikipedia_title(self, search_term):
+        """Resolve a search term to an actual Wikipedia article title using search API with retry logic"""
         url = "https://en.wikipedia.org/w/api.php"
         params = {
             "action": "opensearch",
@@ -123,7 +303,7 @@ class WikipediaPathFinder:
         }
 
         try:
-            response = self.session.get(url, params=params, timeout=10)
+            response = await self.client.get(url, params=params)
             response.raise_for_status()
             data = response.json()
 
@@ -136,14 +316,14 @@ class WikipediaPathFinder:
                 print(f"No Wikipedia article found for '{search_term}'")
                 return None
 
-        except requests.exceptions.RequestException as e:
+        except httpx.HTTPError as e:
             print(f"Request error resolving '{search_term}': {e}")
             return None
         except Exception as e:
             print(f"Unexpected error resolving '{search_term}': {e}")
             return None
 
-    def find_path_bidirectional(self, start, end, callback=None):
+    async def find_path_bidirectional(self, start, end, callback=None):
         """Find shortest path using bidirectional BFS (5-10x faster)
 
         Args:
@@ -185,7 +365,7 @@ class WikipediaPathFinder:
                 nodes_since_last_event += 1
 
                 # Get forward links
-                links = self.get_wikipedia_links(current_page)
+                links = await self.get_wikipedia_links(current_page)
 
                 if links is None:
                     continue
@@ -219,7 +399,7 @@ class WikipediaPathFinder:
                 nodes_since_last_event += 1
 
                 # Get backward links (backlinks)
-                links = self.get_wikipedia_backlinks(current_page, limit=300)
+                links = await self.get_wikipedia_backlinks(current_page, limit=300)
 
                 for link in links:
                     link_normalized = self.normalize_title(link)
@@ -264,7 +444,7 @@ class WikipediaPathFinder:
 
             # Small delay to be nice to Wikipedia's servers
             if pages_checked % 10 == 0:
-                time.sleep(0.05)
+                await asyncio.sleep(0.05)
 
         return None  # No path found
 
@@ -291,36 +471,80 @@ class WikipediaPathFinder:
             current = parent_normalized
         return path
 
-    def find_path(self, start, end, callback=None):
+    async def find_path(self, start, end, callback=None):
         """Find shortest path between two Wikipedia pages
 
         Now uses bidirectional BFS for 5-10x performance improvement.
         """
         # Use the optimized bidirectional search
-        return self.find_path_bidirectional(start, end, callback)
+        return await self.find_path_bidirectional(start, end, callback)
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    """Serve the main HTML page"""
+    return templates.TemplateResponse("index.html", {"request": request})
 
-@app.route('/find-path', methods=['POST'])
-def find_path():
-    data = request.json
-    start_term = data.get('start', '').strip()
-    end_term = data.get('end', '').strip()
 
-    if not start_term or not end_term:
-        return jsonify({'error': 'Both search terms are required'}), 400
+@app.post("/find-path")
+@limiter.limit("10/minute")
+async def find_path_endpoint(request: Request, search_request: SearchRequest, timeout_seconds: int = 300):
+    """
+    Find path between two Wikipedia pages (non-streaming version)
 
-    print(f"Finding path from '{start_term}' to '{end_term}'")
+    This endpoint performs a bidirectional BFS search to find the shortest path
+    between two Wikipedia articles.
 
-    finder = WikipediaPathFinder(max_depth=6)
-    path = finder.find_path(start_term, end_term)
+    Args:
+        search_request: Search parameters (start and end terms)
+        timeout_seconds: Maximum search duration in seconds (default: 300 = 5 minutes)
+    """
+    start_term = search_request.start.strip()
+    end_term = search_request.end.strip()
 
+    logger.info(
+        "Starting path search",
+        extra={
+            "start_term": start_term,
+            "end_term": end_term,
+            "timeout": timeout_seconds
+        }
+    )
+
+    try:
+        # Wrap search in timeout to prevent indefinite searches
+        async with asyncio.timeout(timeout_seconds):
+            async with WikipediaPathFinder(max_depth=6) as finder:
+                path = await finder.find_path(start_term, end_term)
+    except asyncio.TimeoutError:
+        # Search exceeded timeout
+        error_msg = f'Search timeout exceeded ({timeout_seconds} seconds). Try narrowing your search terms.'
+
+        # Still try to save to database
+        try:
+            search_id = database.save_search(
+                start_term=start_term,
+                end_term=end_term,
+                path=[],
+                hops=0,
+                pages_checked=0,
+                success=False,
+                error_message=error_msg
+            )
+        except Exception as e:
+            logger.error("Failed to save timeout error to database", extra={"error": str(e)})
+            search_id = None
+
+        return SearchErrorResponse(
+            search_id=search_id,
+            error=error_msg,
+            pages_checked=0
+        )
+
+    # Continue with normal flow if no timeout
     if path:
         # Create nodes and edges for visualization
-        nodes = [{'id': i, 'label': page, 'title': page} for i, page in enumerate(path)]
-        edges = [{'from': i, 'to': i+1} for i in range(len(path)-1)]
+        nodes = [Node(id=i, label=page, title=page) for i, page in enumerate(path)]
+        edges = [Edge(**{'from': i, 'to': i+1}) for i in range(len(path)-1)]
 
         # Save to database
         search_id = database.save_search(
@@ -332,15 +556,15 @@ def find_path():
             success=True
         )
 
-        return jsonify({
-            'success': True,
-            'search_id': search_id,
-            'path': path,
-            'nodes': nodes,
-            'edges': edges,
-            'hops': len(path) - 1,
-            'pages_checked': len(finder.visited)
-        })
+        return SearchResponse(
+            success=True,
+            search_id=search_id,
+            path=path,
+            nodes=nodes,
+            edges=edges,
+            hops=len(path) - 1,
+            pages_checked=len(finder.visited)
+        )
     else:
         error_msg = f'No path found within {finder.max_depth} hops'
 
@@ -355,175 +579,220 @@ def find_path():
             error_message=error_msg
         )
 
-        return jsonify({
-            'success': False,
-            'search_id': search_id,
-            'error': error_msg,
-            'pages_checked': len(finder.visited)
-        })
+        return SearchErrorResponse(
+            search_id=search_id,
+            error=error_msg,
+            pages_checked=len(finder.visited)
+        )
 
-@app.route('/find-path-stream', methods=['POST'])
-def find_path_stream():
-    """Stream BFS exploration in real-time using Server-Sent Events"""
-    data = request.json
-    start_term = data.get('start', '').strip()
-    end_term = data.get('end', '').strip()
+@app.post('/find-path-stream')
+@limiter.limit("5/minute")
+async def find_path_stream(request: Request, search_request: SearchRequest):
+    """
+    Stream BFS exploration in real-time using Server-Sent Events
 
-    if not start_term or not end_term:
-        def error_generator():
-            yield f"data: {json.dumps({'type': 'error', 'message': 'Both search terms are required'})}\n\n"
-        return Response(error_generator(), mimetype='text/event-stream')
+    This endpoint provides real-time updates as the pathfinding algorithm
+    explores Wikipedia pages.
+    """
+    start_term = search_request.start.strip()
+    end_term = search_request.end.strip()
 
-    print(f"Streaming path search from '{start_term}' to '{end_term}'")
+    logger.info("Starting streaming path search", extra={"start_term": start_term, "end_term": end_term})
 
-    def generate_events():
-        """Generator function that yields SSE events in real-time"""
-        finder = WikipediaPathFinder(max_depth=6)
-        event_queue = Queue()
-        result = {'path': None, 'pages_checked': 0, 'success': False, 'error': None}
+    async def generate_events():
+        """Async generator function that yields SSE events in real-time"""
+        async with WikipediaPathFinder(max_depth=6) as finder:
+            event_queue = asyncio.Queue()
+            result = {'path': None, 'pages_checked': 0, 'success': False, 'error': None}
 
-        # Send start event
-        yield f"data: {json.dumps({'type': 'start', 'data': {'start': start_term, 'end': end_term}})}\n\n"
+            # Send start event
+            yield f"data: {json.dumps({'type': 'start', 'data': {'start': start_term, 'end': end_term}})}\n\n"
 
-        # Resolve search terms to actual Wikipedia article titles
-        yield f"data: {json.dumps({'type': 'resolving', 'data': {'message': 'Resolving search terms...'}})}\n\n"
+            # Resolve search terms to actual Wikipedia article titles
+            yield f"data: {json.dumps({'type': 'resolving', 'data': {'message': 'Resolving search terms...'}})}\n\n"
 
-        resolved_start = finder.resolve_wikipedia_title(start_term)
-        resolved_end = finder.resolve_wikipedia_title(end_term)
+            resolved_start = await finder.resolve_wikipedia_title(start_term)
+            resolved_end = await finder.resolve_wikipedia_title(end_term)
 
-        # Check if both terms could be resolved
-        if not resolved_start:
-            error_event = {
-                'type': 'error',
-                'data': {'message': f"Could not find Wikipedia article for '{start_term}'. Please check spelling or try a more specific term."}
-            }
-            yield f"data: {json.dumps(error_event)}\n\n"
-            return
-
-        if not resolved_end:
-            error_event = {
-                'type': 'error',
-                'data': {'message': f"Could not find Wikipedia article for '{end_term}'. Please check spelling or try a more specific term."}
-            }
-            yield f"data: {json.dumps(error_event)}\n\n"
-            return
-
-        # Send resolved titles to frontend
-        yield f"data: {json.dumps({'type': 'resolved', 'data': {'start': resolved_start, 'end': resolved_end}})}\n\n"
-
-        # Use resolved titles for search
-        actual_start = resolved_start
-        actual_end = resolved_end
-
-        def callback(event_type, event_data):
-            """Callback that puts events in queue for real-time streaming"""
-            # Put event in queue immediately
-            event_queue.put({'type': event_type, 'data': event_data})
-
-            # Store result data for database
-            if event_type == 'complete':
-                result['path'] = event_data.get('path')
-                result['pages_checked'] = event_data.get('pages_checked')
-                result['success'] = True
-                event_queue.put(None)  # Sentinel to stop
-            elif event_type == 'progress':
-                result['pages_checked'] = event_data.get('pages_checked', result['pages_checked'])
-
-        # Run pathfinding in separate thread so we can yield events concurrently
-        def run_search():
-            try:
-                path = finder.find_path(actual_start, actual_end, callback=callback)
-
-                # If path not found, send error
-                if not path:
-                    error_event = {
-                        'type': 'error',
-                        'data': {
-                            'message': f'No path found within {finder.max_depth} hops',
-                            'pages_checked': len(finder.visited)
-                        }
-                    }
-                    event_queue.put(error_event)
-                    result['pages_checked'] = len(finder.visited)
-                    result['error'] = error_event['data']['message']
-                    event_queue.put(None)  # Sentinel
-            except Exception as e:
+            # Check if both terms could be resolved
+            if not resolved_start:
                 error_event = {
                     'type': 'error',
-                    'data': {'message': str(e)}
+                    'data': {'message': f"Could not find Wikipedia article for '{start_term}'. Please check spelling or try a more specific term."}
                 }
-                event_queue.put(error_event)
-                result['error'] = str(e)
-                event_queue.put(None)  # Sentinel
+                yield f"data: {json.dumps(error_event)}\n\n"
+                return
 
-        search_thread = threading.Thread(target=run_search)
-        search_thread.start()
+            if not resolved_end:
+                error_event = {
+                    'type': 'error',
+                    'data': {'message': f"Could not find Wikipedia article for '{end_term}'. Please check spelling or try a more specific term."}
+                }
+                yield f"data: {json.dumps(error_event)}\n\n"
+                return
 
-        # Yield events as they arrive in the queue
-        while True:
+            # Send resolved titles to frontend
+            yield f"data: {json.dumps({'type': 'resolved', 'data': {'start': resolved_start, 'end': resolved_end}})}\n\n"
+
+            # Use resolved titles for search
+            actual_start = resolved_start
+            actual_end = resolved_end
+
+            def callback(event_type, event_data):
+                """Callback that puts events in queue for real-time streaming"""
+                # Put event in queue immediately (using put_nowait for sync callback)
+                event_queue.put_nowait({'type': event_type, 'data': event_data})
+
+                # Store result data for database
+                if event_type == 'complete':
+                    result['path'] = event_data.get('path')
+                    result['pages_checked'] = event_data.get('pages_checked')
+                    result['success'] = True
+                    event_queue.put_nowait(None)  # Sentinel to stop
+                elif event_type == 'progress':
+                    result['pages_checked'] = event_data.get('pages_checked', result['pages_checked'])
+
+            # Run pathfinding in async task
+            async def run_search():
+                try:
+                    path = await finder.find_path(actual_start, actual_end, callback=callback)
+
+                    # If path not found, send error
+                    if not path:
+                        error_event = {
+                            'type': 'error',
+                            'data': {
+                                'message': f'No path found within {finder.max_depth} hops',
+                                'pages_checked': len(finder.visited)
+                            }
+                        }
+                        event_queue.put_nowait(error_event)
+                        result['pages_checked'] = len(finder.visited)
+                        result['error'] = error_event['data']['message']
+                        event_queue.put_nowait(None)  # Sentinel
+                except Exception as e:
+                    error_event = {
+                        'type': 'error',
+                        'data': {'message': str(e)}
+                    }
+                    event_queue.put_nowait(error_event)
+                    result['error'] = str(e)
+                    event_queue.put_nowait(None)  # Sentinel
+
+            # Start search task
+            search_task = asyncio.create_task(run_search())
+
             try:
-                event = event_queue.get(timeout=30)  # 30 second timeout for keepalive
-                if event is None:  # Sentinel - search is done
-                    break
-                # Yield event immediately
-                yield f"data: {json.dumps(event)}\n\n"
-            except Empty:
-                # Send keepalive to prevent connection timeout
-                yield f"data: {json.dumps({'type': 'keepalive'})}\n\n"
+                # Yield events as they arrive in the queue
+                while True:
+                    try:
+                        # Try to get event with timeout for keepalive
+                        try:
+                            event = await asyncio.wait_for(event_queue.get(), timeout=0.5)
+                            if event is None:  # Sentinel - search is done
+                                break
+                            # Yield event immediately
+                            yield f"data: {json.dumps(event)}\n\n"
+                        except asyncio.TimeoutError:
+                            # Send keepalive if no events
+                            yield f"data: {json.dumps({'type': 'keepalive'})}\n\n"
+                    except Exception as e:
+                        print(f"Error in event loop: {e}")
+                        break
 
-        # Wait for search thread to complete
-        search_thread.join()
+                # Wait for search task to complete
+                await search_task
 
-        # Save to database
-        if result['success'] and result['path']:
-            search_id = database.save_search(
-                start_term=start_term,
-                end_term=end_term,
-                path=result['path'],
-                hops=len(result['path']) - 1,
-                pages_checked=result['pages_checked'],
-                success=True
-            )
-        else:
-            search_id = database.save_search(
-                start_term=start_term,
-                end_term=end_term,
-                path=[],
-                hops=0,
-                pages_checked=result['pages_checked'],
-                success=False,
-                error_message=result.get('error', f'No path found within {finder.max_depth} hops')
-            )
+            except asyncio.CancelledError:
+                # Client disconnected - cancel the search task
+                logger.info("Client disconnected, cancelling search task")
+                search_task.cancel()
+                try:
+                    await search_task
+                except asyncio.CancelledError:
+                    logger.info("Search task successfully cancelled")
+                raise  # Re-raise to properly close the stream
 
-        # Send done event
-        done_event = {
-            'type': 'done',
-            'data': {'search_id': search_id}
+            # Save to database
+            if result['success'] and result['path']:
+                search_id = database.save_search(
+                    start_term=start_term,
+                    end_term=end_term,
+                    path=result['path'],
+                    hops=len(result['path']) - 1,
+                    pages_checked=result['pages_checked'],
+                    success=True
+                )
+            else:
+                search_id = database.save_search(
+                    start_term=start_term,
+                    end_term=end_term,
+                    path=[],
+                    hops=0,
+                    pages_checked=result['pages_checked'],
+                    success=False,
+                    error_message=result.get('error', f'No path found within 6 hops')
+                )
+
+            # Send done event
+            done_event = {
+                'type': 'done',
+                'data': {'search_id': search_id}
+            }
+            yield f"data: {json.dumps(done_event)}\n\n"
+
+    return StreamingResponse(
+        generate_events(),
+        media_type='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no'
         }
-        yield f"data: {json.dumps(done_event)}\n\n"
+    )
 
-    response = Response(stream_with_context(generate_events()), mimetype='text/event-stream')
-    response.headers['Cache-Control'] = 'no-cache'
-    response.headers['X-Accel-Buffering'] = 'no'  # Disable nginx buffering
-    return response
+@app.get('/api/searches')
+@limiter.limit("30/minute")
+async def get_searches(
+    request: Request,
+    q: Optional[str] = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0)
+):
+    """
+    Get all searches with optional filtering
 
-@app.route('/api/searches', methods=['GET'])
-def get_searches():
-    """Get all searches with optional filtering"""
-    search_query = request.args.get('q', None)
-    limit = int(request.args.get('limit', 100))
-    offset = int(request.args.get('offset', 0))
+    - **q**: Optional search query to filter by start_term or end_term (max 200 chars)
+    - **limit**: Maximum number of results to return (1-500, default: 100)
+    - **offset**: Number of results to skip (default: 0)
+    """
+    # Validate and sanitize search query
+    if q:
+        q = q.strip()
+        if len(q) > 200:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail="Search query too long (max 200 characters)")
 
-    searches = database.get_all_searches(search_query, limit, offset)
-    return jsonify({'searches': searches})
+        # Basic sanitization
+        if not re.match(r'^[a-zA-Z0-9\s\-\(\)\'\.,&]*$', q):
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail="Search query contains invalid characters")
 
-@app.route('/api/searches/<int:search_id>', methods=['GET'])
-def get_search(search_id):
-    """Get a specific search by ID"""
+    searches = database.get_all_searches(q, limit, offset)
+    return {'searches': searches}
+
+
+@app.get('/api/searches/{search_id}')
+async def get_search(search_id: int):
+    """
+    Get a specific search by ID
+
+    Returns detailed information including the full path and visualization data.
+    """
     search = database.get_search_by_id(search_id)
 
     if not search:
-        return jsonify({'error': 'Search not found'}), 404
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail='Search not found')
 
     # Create nodes and edges if path exists
     if search['path']:
@@ -532,15 +801,28 @@ def get_search(search_id):
         search['nodes'] = nodes
         search['edges'] = edges
 
-    return jsonify(search)
+    return search
 
-@app.route('/api/stats', methods=['GET'])
-def get_stats():
-    """Get search statistics"""
+
+@app.get('/api/stats')
+async def get_stats():
+    """
+    Get search statistics
+
+    Returns aggregate statistics about all searches including:
+    - Total number of searches
+    - Successful searches count
+    - Average number of hops
+    - Average pages checked
+    """
     stats = database.get_search_stats()
-    return jsonify(stats)
+    return stats
+
+# Mount static files AFTER all routes
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 if __name__ == '__main__':
+    import uvicorn
     import os
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    port = int(os.environ.get('PORT', 8000))
+    uvicorn.run(app, host='0.0.0.0', port=port)

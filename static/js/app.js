@@ -1019,6 +1019,21 @@ async function findConnection() {
     document.getElementById('live-speed').textContent = '0';
     document.querySelector('.search-title').textContent = 'Searching Wikipedia...';
 
+    // Reset all visibility styles for status overlay (in case they were hidden from previous search)
+    const liveStatus = document.getElementById('live-status');
+    liveStatus.style.cssText = '';  // Clear all inline styles
+    liveStatus.offsetHeight;  // Force reflow
+
+    const searchTitle = document.querySelector('.search-title');
+    searchTitle.style.cssText = '';  // Clear all inline styles
+    searchTitle.offsetHeight;  // Force reflow
+
+    const liveSearchOverlay = document.querySelector('.live-search-overlay');
+    if (liveSearchOverlay) {
+        liveSearchOverlay.style.cssText = '';  // Clear all inline styles
+        liveSearchOverlay.offsetHeight;  // Force reflow
+    }
+
     // Disable button
     const findBtn = document.getElementById('find-btn');
     findBtn.disabled = true;
