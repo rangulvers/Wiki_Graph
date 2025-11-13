@@ -2,7 +2,10 @@
 
 A modern, high-performance web application that finds the shortest path between any two Wikipedia topics using an optimized bidirectional BFS algorithm with real-time streaming updates.
 
-🔗 **Live Demo**: [https://wikigraph-production.up.railway.app](https://wikigraph-production.up.railway.app)
+🔗 **Live Demo**: [https://wikigraph.up.railway.app](https://wikigraph.up.railway.app)
+
+<img width="1295" height="1154" alt="image" src="https://github.com/user-attachments/assets/54e78793-5a13-4d52-87a1-921a44c43631" />
+
 
 ## ✨ Features
 
