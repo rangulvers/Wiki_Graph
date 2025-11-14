@@ -42,6 +42,14 @@ export class SearchParticles {
         // Flowing light particles on connections
         this.flowingLights = [];
 
+        // Graph mode state
+        this.graphMode = false;
+        this.graphData = null;
+        this.allPaths = [];
+        this.highlightedPathIndex = -1;
+        this.graphNodes = [];
+        this.graphEdges = [];
+
         this.resizeCanvas();
         window.addEventListener('resize', () => this.resizeCanvas());
 
@@ -322,38 +330,52 @@ export class SearchParticles {
             });
         }
 
-        // Materialize intermediate nodes from particle clusters
+        // Materialize nodes from particle clusters
         const nodeRevealProgress = this.convergenceProgress;
         const nodesToReveal = Math.floor(nodeRevealProgress * this.intermediateNodeData.length);
 
-        for (let i = 0; i < nodesToReveal; i++) {
-            if (i >= this.materializingNodeIndex) {
-                // Create new node from intermediate data
-                const data = this.intermediateNodeData[i];
-                const newNode = new PathNode(
-                    data.x, data.y,
-                    data.label,
-                    data.index,
-                    false,
-                    false
-                );
+        if (this.graphMode) {
+            // Graph mode: Fade in existing nodes (they're already in pathNodes)
+            for (let i = 0; i < nodesToReveal; i++) {
+                if (i < this.pathNodes.length) {
+                    const node = this.pathNodes[i];
+                    // Gradually fade in opacity
+                    const targetOpacity = Math.min((nodeRevealProgress - (i / this.intermediateNodeData.length)) * 2, 1.0);
+                    node.opacity = Math.max(node.opacity, targetOpacity);
+                    node.labelOpacity = Math.max(node.labelOpacity, targetOpacity);
+                }
+            }
+        } else {
+            // Original single-path mode: Create nodes dynamically via splice
+            for (let i = 0; i < nodesToReveal; i++) {
+                if (i >= this.materializingNodeIndex) {
+                    // Create new node from intermediate data
+                    const data = this.intermediateNodeData[i];
+                    const newNode = new PathNode(
+                        data.x, data.y,
+                        data.label,
+                        data.index,
+                        false,
+                        false
+                    );
 
-                // Start with low opacity and fade in
-                newNode.opacity = 0;
-                newNode.labelOpacity = 0;
+                    // Start with low opacity and fade in
+                    newNode.opacity = 0;
+                    newNode.labelOpacity = 0;
 
-                // Insert in correct position (between start and end)
-                this.pathNodes.splice(data.index, 0, newNode);
+                    // Insert in correct position (between start and end)
+                    this.pathNodes.splice(data.index, 0, newNode);
 
-                // Fade in the node
-                const node = newNode;
-                const fadeIn = setInterval(() => {
-                    node.opacity = Math.min(node.opacity + 0.1, 1.0);
-                    node.labelOpacity = Math.min(node.labelOpacity + 0.1, 1.0);
-                    if (node.opacity >= 1.0) clearInterval(fadeIn);
-                }, 30);
+                    // Fade in the node
+                    const node = newNode;
+                    const fadeIn = setInterval(() => {
+                        node.opacity = Math.min(node.opacity + 0.1, 1.0);
+                        node.labelOpacity = Math.min(node.labelOpacity + 0.1, 1.0);
+                        if (node.opacity >= 1.0) clearInterval(fadeIn);
+                    }, 30);
 
-                this.materializingNodeIndex = i + 1;
+                    this.materializingNodeIndex = i + 1;
+                }
             }
         }
 
@@ -369,15 +391,22 @@ export class SearchParticles {
         // Transition to connection phase when convergence is complete
         if (this.convergenceProgress >= 1.0 && this.animationState === 'CONVERGING') {
             setTimeout(() => {
-                this.animationState = 'CONNECTING';
-                this.connectionIndex = 0;
-
                 // Clear search particles (they've done their job)
                 this.particles = [];
 
-                if (this.pathNodes.length > 0) {
-                    this.pathNodes[0].isActive = true;
-                    this.animateNextConnection();
+                if (this.graphMode) {
+                    // Graph mode: Transition to REVEALING for simultaneous edge animation
+                    this.animationState = 'REVEALING';
+                    this.startGraphEdgeAnimation();
+                } else {
+                    // Single-path mode: Use sequential CONNECTING animation
+                    this.animationState = 'CONNECTING';
+                    this.connectionIndex = 0;
+
+                    if (this.pathNodes.length > 0) {
+                        this.pathNodes[0].isActive = true;
+                        this.animateNextConnection();
+                    }
                 }
             }, 500);
         }
@@ -518,21 +547,62 @@ export class SearchParticles {
         this.startFlowingLights();
     }
 
-    startFlowingLights() {
-        // Create flowing light particles along each connection
-        for (let i = 0; i < this.pathNodes.length - 1; i++) {
-            // Create multiple lights per connection at different starting positions
-            const lightsPerConnection = 1;
-            for (let j = 0; j < lightsPerConnection; j++) {
-                this.flowingLights.push({
-                    sourceIndex: i,
-                    targetIndex: i + 1,
-                    progress: j / lightsPerConnection, // Stagger starting positions
-                    speed: 0.005 + Math.random() * 0.003,
+    startGraphEdgeAnimation() {
+        // Initialize simultaneous animation for all edges in graph mode
+        this.edgeRevealStartTime = Date.now();
+        this.edgeRevealDuration = 1000; // 1 second for all edges to reveal
+
+        // Create beam particles for all edges simultaneously
+        this.pathConnections.forEach(conn => {
+            const beamParticleCount = 15;
+
+            for (let i = 0; i < beamParticleCount; i++) {
+                this.connectionParticles.push({
+                    progress: i / beamParticleCount,
+                    speed: 0.04,
+                    connection: conn,
+                    sourceNode: conn.from,
+                    targetNode: conn.to,
                     size: 2 + Math.random() * 2,
-                    opacity: 0.7 + Math.random() * 0.3,
-                    color: '179, 229, 255' // Blue-white
+                    startDelay: Math.random() * 200 // Stagger start times slightly
                 });
+            }
+        });
+    }
+
+    startFlowingLights() {
+        // In graph mode, create flowing lights for all edges
+        if (this.graphMode && this.pathConnections) {
+            this.pathConnections.forEach((conn, connIndex) => {
+                // Create multiple lights per connection at different starting positions
+                const lightsPerConnection = 2;
+                for (let j = 0; j < lightsPerConnection; j++) {
+                    this.flowingLights.push({
+                        connection: conn,
+                        progress: j / lightsPerConnection, // Stagger starting positions
+                        speed: 0.005 + Math.random() * 0.003,
+                        size: 2 + Math.random() * 2,
+                        opacity: 0.7 + Math.random() * 0.3,
+                        color: '179, 229, 255' // Blue-white
+                    });
+                }
+            });
+        } else {
+            // Original single-path mode
+            for (let i = 0; i < this.pathNodes.length - 1; i++) {
+                // Create multiple lights per connection at different starting positions
+                const lightsPerConnection = 1;
+                for (let j = 0; j < lightsPerConnection; j++) {
+                    this.flowingLights.push({
+                        sourceIndex: i,
+                        targetIndex: i + 1,
+                        progress: j / lightsPerConnection, // Stagger starting positions
+                        speed: 0.005 + Math.random() * 0.003,
+                        size: 2 + Math.random() * 2,
+                        opacity: 0.7 + Math.random() * 0.3,
+                        color: '179, 229, 255' // Blue-white
+                    });
+                }
             }
         }
     }
@@ -553,8 +623,17 @@ export class SearchParticles {
 
     drawFlowingLights() {
         this.flowingLights.forEach(light => {
-            const sourceNode = this.pathNodes[light.sourceIndex];
-            const targetNode = this.pathNodes[light.targetIndex];
+            let sourceNode, targetNode;
+
+            // Graph mode: use connection object
+            if (light.connection) {
+                sourceNode = light.connection.from;
+                targetNode = light.connection.to;
+            } else {
+                // Original mode: use indices
+                sourceNode = this.pathNodes[light.sourceIndex];
+                targetNode = this.pathNodes[light.targetIndex];
+            }
 
             if (!sourceNode || !targetNode) return;
 
@@ -636,6 +715,9 @@ export class SearchParticles {
         } else if (this.animationState === 'CONVERGING') {
             // Draw convergence animation
             this.drawConvergenceAnimation();
+        } else if (this.animationState === 'REVEALING') {
+            // Draw REVEALING state (simultaneous edge animation in graph mode)
+            this.drawPathAnimation();
         } else if (this.animationState !== 'SEARCHING') {
             // Path animation mode - draw nodes and connections
             this.drawPathAnimation();
@@ -759,19 +841,114 @@ export class SearchParticles {
     }
 
     drawPathAnimation() {
-        // Draw connection lines between completed nodes
-        for (let i = 0; i < this.pathNodes.length - 1; i++) {
-            if (i < this.connectionIndex) {
-                const node1 = this.pathNodes[i];
-                const node2 = this.pathNodes[i + 1];
+        // Handle REVEALING state (graph mode simultaneous edge animation)
+        if (this.animationState === 'REVEALING') {
+            const elapsed = Date.now() - this.edgeRevealStartTime;
+            const revealProgress = Math.min(elapsed / this.edgeRevealDuration, 1.0);
 
-                // Draw connection line
+            // Draw all edges with fade-in effect
+            this.pathConnections.forEach(conn => {
+                const isHighlighted = this.highlightedPathIndex >= 0 &&
+                    conn.pathIndices.includes(this.highlightedPathIndex);
+                const baseOpacity = isHighlighted ? 0.8 : 0.3;
+                const opacity = baseOpacity * revealProgress;
+
+                this.ctx.save();
+                this.ctx.strokeStyle = `rgba(29, 232, 247, ${opacity})`;
+                this.ctx.lineWidth = conn.thickness;
+                this.ctx.lineCap = 'round';
+
                 this.ctx.beginPath();
-                this.ctx.moveTo(node1.x, node1.y);
-                this.ctx.lineTo(node2.x, node2.y);
-                this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-                this.ctx.lineWidth = 2;
+                this.ctx.moveTo(conn.from.x, conn.from.y);
+                this.ctx.lineTo(conn.to.x, conn.to.y);
                 this.ctx.stroke();
+
+                this.ctx.restore();
+            });
+
+            // Draw beam particles along all edges
+            this.connectionParticles.forEach(p => {
+                p.progress = Math.min(p.progress + p.speed, 1.0);
+
+                if (p.progress <= 1.0 && p.connection) {
+                    const x = p.sourceNode.x + (p.targetNode.x - p.sourceNode.x) * p.progress;
+                    const y = p.sourceNode.y + (p.targetNode.y - p.sourceNode.y) * p.progress;
+
+                    const color = '179, 229, 255';
+
+                    this.ctx.beginPath();
+                    this.ctx.arc(x, y, p.size, 0, Math.PI * 2);
+                    this.ctx.fillStyle = `rgba(${color}, ${1.0 - p.progress * 0.5})`;
+                    this.ctx.shadowBlur = 10;
+                    this.ctx.shadowColor = `rgba(${color}, 0.8)`;
+                    this.ctx.fill();
+                    this.ctx.shadowBlur = 0;
+                }
+            });
+
+            // Transition to COMPLETE when animation finishes
+            if (revealProgress >= 1.0) {
+                this.animationState = 'COMPLETE';
+                this.connectionParticles = []; // Clear beam particles
+                this.startFlowingLights(); // Start flowing lights
+            }
+
+            // Draw all nodes
+            this.pathNodes.forEach(node => {
+                let isHighlighted = false;
+                if (this.highlightedPathIndex >= 0 && this.allPaths) {
+                    isHighlighted = this.allPaths[this.highlightedPathIndex].path.includes(node.label);
+                }
+                const isHovered = this.hoveredNode === node;
+                node.draw(this.ctx, isHovered, isHighlighted);
+            });
+
+            return; // Exit early, handled REVEALING state
+        }
+
+        // In graph mode, draw all edges with highlighting
+        if (this.graphMode && this.pathConnections) {
+            this.pathConnections.forEach(conn => {
+                // Check if this edge is in the highlighted path
+                const isHighlighted = this.highlightedPathIndex >= 0 &&
+                    conn.pathIndices.includes(this.highlightedPathIndex);
+
+                // Set opacity based on highlight state
+                const opacity = isHighlighted ? 0.8 : 0.3;
+
+                this.ctx.save();
+                this.ctx.strokeStyle = `rgba(29, 232, 247, ${opacity})`;
+                this.ctx.lineWidth = conn.thickness;
+                this.ctx.lineCap = 'round';
+
+                // Add glow for highlighted edges
+                if (isHighlighted) {
+                    this.ctx.shadowBlur = 15;
+                    this.ctx.shadowColor = 'rgba(29, 232, 247, 0.8)';
+                }
+
+                this.ctx.beginPath();
+                this.ctx.moveTo(conn.from.x, conn.from.y);
+                this.ctx.lineTo(conn.to.x, conn.to.y);
+                this.ctx.stroke();
+
+                this.ctx.restore();
+            });
+        } else {
+            // Original single-path mode: draw connection lines between completed nodes
+            for (let i = 0; i < this.pathNodes.length - 1; i++) {
+                if (i < this.connectionIndex) {
+                    const node1 = this.pathNodes[i];
+                    const node2 = this.pathNodes[i + 1];
+
+                    // Draw connection line
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(node1.x, node1.y);
+                    this.ctx.lineTo(node2.x, node2.y);
+                    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                    this.ctx.lineWidth = 2;
+                    this.ctx.stroke();
+                }
             }
         }
 
@@ -802,6 +979,12 @@ export class SearchParticles {
                 node.pulsePhase += 0.1;
             }
 
+            // In graph mode, check if node is in highlighted path
+            let isHighlighted = false;
+            if (this.graphMode && this.highlightedPathIndex >= 0 && this.allPaths) {
+                isHighlighted = this.allPaths[this.highlightedPathIndex].path.includes(node.label);
+            }
+
             // Draw pulse ring if exists
             if (node.pulseRadius) {
                 this.ctx.beginPath();
@@ -813,7 +996,7 @@ export class SearchParticles {
 
             // Check if this node is hovered
             const isHovered = this.hoveredNode === node;
-            node.draw(this.ctx, isHovered);
+            node.draw(this.ctx, isHovered, isHighlighted);
         });
     }
 
@@ -890,5 +1073,261 @@ export class SearchParticles {
     handleMouseOut() {
         this.hoveredNode = null;
         this.canvas.style.cursor = 'default';
+    }
+
+    /**
+     * Build graph path - animate all nodes and edges for merged graph
+     */
+    buildGraphPath(graphData, allPaths) {
+        this.graphMode = true;
+        this.graphData = graphData;
+        this.allPaths = allPaths;
+        this.highlightedPathIndex = 0;
+
+        // Create PathNode objects for all graph nodes
+        this.pathNodes = graphData.nodes.map((node, index) => {
+            return new PathNode(
+                node.x,
+                node.y,
+                node.title,
+                index,
+                node.isStart || false,
+                node.isEnd || false
+            );
+        });
+
+        // Store graph nodes reference
+        this.graphNodes = this.pathNodes;
+
+        // Initialize all nodes with zero opacity (they'll fade in during convergence)
+        this.pathNodes.forEach(node => {
+            node.opacity = 0;
+            node.labelOpacity = 0;
+        });
+
+        // Create all edges (connections between nodes)
+        this.pathConnections = [];
+        graphData.edges.forEach(edge => {
+            const fromNode = this.pathNodes.find(n => n.label === edge.from);
+            const toNode = this.pathNodes.find(n => n.label === edge.to);
+
+            if (fromNode && toNode) {
+                this.pathConnections.push({
+                    from: fromNode,
+                    to: toNode,
+                    progress: 0,
+                    pathIndices: edge.pathIndices,
+                    thickness: edge.thickness
+                });
+            }
+        });
+
+        // Freeze background particles for convergence
+        this.backgroundParticles.forEach(p => {
+            p.frozen = true;
+        });
+
+        // Reset connection tracking
+        this.connectionIndex = 0;
+        this.connectionParticles = [];
+
+        // Populate intermediateNodeData with all graph node positions for particle convergence
+        this.intermediateNodeData = this.pathNodes.map(node => ({
+            x: node.x,
+            y: node.y,
+            label: node.label,
+            index: node.index
+        }));
+
+        // Start convergence animation
+        this.animationState = 'CONVERGING';
+        this.startConvergence();
+    }
+
+    /**
+     * Convert existing particles to be attracted to graph nodes
+     */
+    convertToGraphParticles() {
+        // Keep background particles but make them attracted to nodes
+        this.backgroundParticles = this.backgroundParticles.slice(0, 80); // Increase to 80 particles
+
+        // Add more particles if needed
+        while (this.backgroundParticles.length < 80) {
+            this.backgroundParticles.push({
+                x: Math.random() * this.canvas.width,
+                y: Math.random() * this.canvas.height,
+                vx: (Math.random() - 0.5) * 1.5,
+                vy: (Math.random() - 0.5) * 1.5,
+                size: 0.8 + Math.random() * 1.2,
+                opacity: 0.3 + Math.random() * 0.3,
+                color: Math.random() > 0.5 ? '29, 232, 247' : '0, 255, 200',
+                targetNode: null
+            });
+        }
+
+        // Assign target nodes to particles
+        this.backgroundParticles.forEach(particle => {
+            particle.targetNode = this.graphNodes[Math.floor(Math.random() * this.graphNodes.length)];
+        });
+    }
+
+    /**
+     * Highlight a specific path in the graph
+     */
+    highlightPath(pathIndex) {
+        this.highlightedPathIndex = pathIndex;
+    }
+
+    /**
+     * Update particles in graph mode - attracted to nearest forward node
+     */
+    updateGraphParticles() {
+        this.backgroundParticles.forEach(particle => {
+            // Find nodes to the right (forward direction)
+            const forwardNodes = this.graphNodes.filter(n => n.x > particle.x);
+
+            // If no forward nodes, reset to left side
+            if (forwardNodes.length === 0) {
+                particle.x = 50;
+                particle.y = Math.random() * this.canvas.height;
+                particle.targetNode = this.graphNodes[0];
+                return;
+            }
+
+            // Find nearest forward node
+            let nearest = forwardNodes[0];
+            let minDist = this.distance(particle, nearest);
+
+            forwardNodes.forEach(node => {
+                const dist = this.distance(particle, node);
+                if (dist < minDist) {
+                    minDist = dist;
+                    nearest = node;
+                }
+            });
+
+            particle.targetNode = nearest;
+
+            // Apply attraction force
+            const dx = nearest.x - particle.x;
+            const dy = nearest.y - particle.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist > 5) {
+                const force = 0.02; // Attraction strength
+                particle.vx += (dx / dist) * force;
+                particle.vy += (dy / dist) * force;
+
+                // Apply damping
+                particle.vx *= 0.95;
+                particle.vy *= 0.95;
+
+                // Limit speed
+                const speed = Math.sqrt(particle.vx * particle.vx + particle.vy * particle.vy);
+                if (speed > 3) {
+                    particle.vx = (particle.vx / speed) * 3;
+                    particle.vy = (particle.vy / speed) * 3;
+                }
+
+                particle.x += particle.vx;
+                particle.y += particle.vy;
+            }
+
+            // Bounce off canvas edges
+            if (particle.x < 0 || particle.x > this.canvas.width) particle.vx *= -0.5;
+            if (particle.y < 0 || particle.y > this.canvas.height) particle.vy *= -0.5;
+        });
+    }
+
+    /**
+     * Draw the graph (nodes and edges)
+     */
+    drawGraph() {
+        const ctx = this.ctx;
+
+        // Draw edges first (behind nodes)
+        this.graphData.edges.forEach(edge => {
+            const fromNode = this.graphNodes.find(n => n.label === edge.from);
+            const toNode = this.graphNodes.find(n => n.label === edge.to);
+
+            if (!fromNode || !toNode) return;
+
+            // Check if this edge is in the highlighted path
+            const isHighlighted = this.highlightedPathIndex >= 0 &&
+                edge.pathIndices.includes(this.highlightedPathIndex);
+
+            // Set opacity based on highlight state
+            const opacity = isHighlighted ? 0.8 : 0.3;
+
+            ctx.save();
+            ctx.strokeStyle = `rgba(29, 232, 247, ${opacity})`;
+            ctx.lineWidth = edge.thickness;
+            ctx.lineCap = 'round';
+
+            // Add glow for highlighted edges
+            if (isHighlighted) {
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = 'rgba(29, 232, 247, 0.8)';
+            }
+
+            ctx.beginPath();
+            ctx.moveTo(fromNode.x, fromNode.y);
+            ctx.lineTo(toNode.x, toNode.y);
+            ctx.stroke();
+
+            ctx.restore();
+        });
+
+        // Draw nodes on top
+        this.graphNodes.forEach(node => {
+            // Check if this node is in the highlighted path
+            const isHighlighted = this.highlightedPathIndex >= 0 &&
+                this.allPaths[this.highlightedPathIndex].path.includes(node.label);
+
+            const isHovered = this.hoveredNode === node;
+
+            // Enhance node appearance if highlighted
+            if (isHighlighted) {
+                node.pulsePhase = (node.pulsePhase || 0) + 0.1;
+            }
+
+            node.draw(ctx, isHovered, isHighlighted);
+        });
+    }
+
+    /**
+     * Calculate distance between two points
+     */
+    distance(p1, p2) {
+        const dx = p1.x - p2.x;
+        const dy = p1.y - p2.y;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    /**
+     * Update hovered node in graph mode
+     */
+    updateGraphHover() {
+        let foundHover = false;
+
+        for (const node of this.graphNodes) {
+            const dx = this.mouseX - node.x;
+            const dy = this.mouseY - node.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < node.size + 10) {
+                if (this.hoveredNode !== node) {
+                    this.hoveredNode = node;
+                    this.canvas.style.cursor = 'pointer';
+                }
+                foundHover = true;
+                break;
+            }
+        }
+
+        if (!foundHover && this.hoveredNode) {
+            this.hoveredNode = null;
+            this.canvas.style.cursor = 'default';
+        }
     }
 }

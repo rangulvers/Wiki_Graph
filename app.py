@@ -20,6 +20,7 @@ from models import (
     SearchRequest, SearchResponse, SearchErrorResponse,
     Node, Edge
 )
+from path_cache import get_cache
 
 # Type variable for generic async function decorator
 T = TypeVar('T')
@@ -323,6 +324,187 @@ class WikipediaPathFinder:
             print(f"Unexpected error resolving '{search_term}': {e}")
             return None
 
+    async def find_k_paths_bidirectional(self, start, end, max_paths=3, min_diversity=0.3, callback=None):
+        """Find multiple diverse paths using bidirectional BFS
+
+        Args:
+            start: Starting Wikipedia page title
+            end: Target Wikipedia page title
+            max_paths: Maximum number of paths to find (default: 3)
+            min_diversity: Minimum Jaccard distance between paths (default: 0.3)
+            callback: Optional function(event_type, data) for streaming updates
+
+        Returns:
+            List of paths, each path is a list of page titles
+        """
+        start_normalized = self.normalize_title(start)
+        end_normalized = self.normalize_title(end)
+
+        if start_normalized == end_normalized:
+            return [[start]]
+
+        # Track found paths and meeting points
+        found_paths = []
+        meeting_points = []  # Store all discovered meeting points
+        shortest_path_length = None
+
+        # BFS state
+        forward_queue = deque([(start, [start], 0)])
+        backward_queue = deque([(end, [end], 0)])
+        forward_visited = {start_normalized: None}
+        backward_visited = {end_normalized: None}
+        forward_parents = {start_normalized: (None, start)}
+        backward_parents = {end_normalized: (None, end)}
+
+        pages_checked = 0
+        forward_depth = 0
+        backward_depth = 0
+        last_event_time = time.time()
+        nodes_since_last_event = 0
+
+        # Continue searching until we have enough diverse paths
+        while (forward_queue or backward_queue) and len(found_paths) < max_paths:
+            current_depth = forward_depth + backward_depth
+
+            # Stop if we're searching too deep beyond shortest path
+            if shortest_path_length and current_depth > shortest_path_length + 2:
+                break
+
+            if current_depth > self.max_depth:
+                break
+
+            # Process forward direction
+            if forward_queue and forward_depth <= backward_depth:
+                current_page, path, depth = forward_queue.popleft()
+                forward_depth = max(forward_depth, depth)
+                pages_checked += 1
+                nodes_since_last_event += 1
+
+                links = await self.get_wikipedia_links(current_page)
+                if links is None:
+                    continue
+
+                for link in links:
+                    link_normalized = self.normalize_title(link)
+
+                    # Found a meeting point!
+                    if link_normalized in backward_visited:
+                        forward_path = path + [link]
+                        backward_path = self._reconstruct_backward_path(link_normalized, backward_parents)
+                        new_path = forward_path + backward_path
+
+                        # Track shortest path length
+                        if shortest_path_length is None:
+                            shortest_path_length = len(new_path)
+
+                        # Check if path is diverse enough
+                        if self._is_diverse_path(new_path, found_paths, min_diversity):
+                            found_paths.append(new_path)
+                            meeting_points.append(link_normalized)
+
+                            if callback:
+                                callback('path_found', {
+                                    'path_number': len(found_paths),
+                                    'path': new_path,
+                                    'length': len(new_path) - 1,
+                                    'meeting_point': link
+                                })
+
+                    # Continue BFS
+                    if link_normalized not in forward_visited:
+                        forward_visited[link_normalized] = current_page
+                        forward_parents[link_normalized] = (self.normalize_title(current_page), link)
+                        forward_queue.append((link, path + [link], depth + 1))
+
+            # Process backward direction
+            elif backward_queue:
+                current_page, path, depth = backward_queue.popleft()
+                backward_depth = max(backward_depth, depth)
+                pages_checked += 1
+                nodes_since_last_event += 1
+
+                links = await self.get_wikipedia_backlinks(current_page, limit=300)
+
+                for link in links:
+                    link_normalized = self.normalize_title(link)
+
+                    # Found a meeting point!
+                    if link_normalized in forward_visited:
+                        forward_path = self._reconstruct_forward_path(link_normalized, forward_parents)
+                        new_path = forward_path + path
+
+                        if shortest_path_length is None:
+                            shortest_path_length = len(new_path)
+
+                        if self._is_diverse_path(new_path, found_paths, min_diversity):
+                            found_paths.append(new_path)
+                            meeting_points.append(link_normalized)
+
+                            if callback:
+                                callback('path_found', {
+                                    'path_number': len(found_paths),
+                                    'path': new_path,
+                                    'length': len(new_path) - 1,
+                                    'meeting_point': link
+                                })
+
+                    if link_normalized not in backward_visited:
+                        backward_visited[link_normalized] = current_page
+                        backward_parents[link_normalized] = (self.normalize_title(current_page), link)
+                        backward_queue.append((link, [link] + path, depth + 1))
+
+            # Send progress events
+            current_time = time.time()
+            should_send = (nodes_since_last_event >= 20) or ((current_time - last_event_time) >= 0.5)
+
+            if callback and should_send:
+                pages_per_sec = int(nodes_since_last_event / (current_time - last_event_time)) if (current_time - last_event_time) > 0 else 0
+                callback('progress', {
+                    'forward_depth': forward_depth,
+                    'backward_depth': backward_depth,
+                    'depth': forward_depth + backward_depth,
+                    'pages_checked': pages_checked,
+                    'paths_found': len(found_paths),
+                    'pages_per_second': pages_per_sec
+                })
+                last_event_time = current_time
+                nodes_since_last_event = 0
+
+            # Small delay to be nice to Wikipedia's servers
+            if pages_checked % 10 == 0:
+                await asyncio.sleep(0.05)
+
+        # Sort paths by length (shortest first)
+        found_paths.sort(key=len)
+
+        return found_paths if found_paths else None
+
+    def _is_diverse_path(self, new_path, existing_paths, min_diversity):
+        """Check if new path is sufficiently different from existing paths
+
+        Uses Jaccard distance: 1 - (intersection / union) of nodes
+        """
+        if not existing_paths:
+            return True
+
+        new_path_set = set(self.normalize_title(p) for p in new_path)
+
+        for existing_path in existing_paths:
+            existing_set = set(self.normalize_title(p) for p in existing_path)
+
+            intersection = len(new_path_set & existing_set)
+            union = len(new_path_set | existing_set)
+
+            # Jaccard similarity
+            similarity = intersection / union if union > 0 else 0
+            diversity = 1 - similarity
+
+            # If too similar to any existing path, reject
+            if diversity < min_diversity:
+                return False
+
+        return True
+
     async def find_path_bidirectional(self, start, end, callback=None):
         """Find shortest path using bidirectional BFS (5-10x faster)
 
@@ -514,7 +696,18 @@ async def find_path_endpoint(request: Request, search_request: SearchRequest, ti
         # Wrap search in timeout to prevent indefinite searches
         async with asyncio.timeout(timeout_seconds):
             async with WikipediaPathFinder(max_depth=6) as finder:
-                path = await finder.find_path(start_term, end_term)
+                # Use multi-path finder if max_paths > 1
+                if search_request.max_paths > 1:
+                    paths = await finder.find_k_paths_bidirectional(
+                        start_term,
+                        end_term,
+                        max_paths=search_request.max_paths,
+                        min_diversity=search_request.min_diversity
+                    )
+                    path = paths[0] if paths else None  # Shortest path for backwards compat
+                else:
+                    paths = None
+                    path = await finder.find_path(start_term, end_term)
     except asyncio.TimeoutError:
         # Search exceeded timeout
         error_msg = f'Search timeout exceeded ({timeout_seconds} seconds). Try narrowing your search terms.'
@@ -542,9 +735,37 @@ async def find_path_endpoint(request: Request, search_request: SearchRequest, ti
 
     # Continue with normal flow if no timeout
     if path:
-        # Create nodes and edges for visualization
+        # Create nodes and edges for primary path (shortest)
         nodes = [Node(id=i, label=page, title=page) for i, page in enumerate(path)]
         edges = [Edge(**{'from': i, 'to': i+1}) for i in range(len(path)-1)]
+
+        # Create PathInfo objects for all paths if multiple
+        path_infos = None
+        if paths and len(paths) > 1:
+            from models import PathInfo
+            path_infos = []
+            for idx, p in enumerate(paths):
+                p_nodes = [Node(id=i, label=page, title=page) for i, page in enumerate(p)]
+                p_edges = [Edge(**{'from': i, 'to': i+1}) for i in range(len(p)-1)]
+
+                # Calculate diversity score vs first path
+                diversity = 0.0
+                if idx > 0:
+                    path_set = set(finder.normalize_title(page) for page in p)
+                    first_set = set(finder.normalize_title(page) for page in paths[0])
+                    intersection = len(path_set & first_set)
+                    union = len(path_set | first_set)
+                    diversity = 1 - (intersection / union) if union > 0 else 0.0
+
+                path_infos.append(PathInfo(
+                    path=p,
+                    hops=len(p) - 1,
+                    nodes=p_nodes,
+                    edges=p_edges,
+                    diversity_score=diversity,
+                    is_cached=False,
+                    cache_segments=[]
+                ))
 
         # Save to database
         search_id = database.save_search(
@@ -556,14 +777,26 @@ async def find_path_endpoint(request: Request, search_request: SearchRequest, ti
             success=True
         )
 
+        # Save all paths and cache segments if multiple paths found
+        if paths and len(paths) > 1:
+            diversity_scores = [path_infos[i].diversity_score for i in range(len(path_infos))] if path_infos else None
+            database.save_multiple_paths(search_id, paths, diversity_scores)
+
+        # Cache all path segments for future use
+        cache = get_cache()
+        for p in (paths if paths else [path]):
+            cache.cache_path(p)
+
         return SearchResponse(
             success=True,
             search_id=search_id,
             path=path,
+            paths=path_infos,
             nodes=nodes,
             edges=edges,
             hops=len(path) - 1,
-            pages_checked=len(finder.visited)
+            pages_checked=len(finder.visited),
+            paths_found=len(paths) if paths else 1
         )
     else:
         error_msg = f'No path found within {finder.max_depth} hops'
@@ -603,10 +836,10 @@ async def find_path_stream(request: Request, search_request: SearchRequest):
         """Async generator function that yields SSE events in real-time"""
         async with WikipediaPathFinder(max_depth=6) as finder:
             event_queue = asyncio.Queue()
-            result = {'path': None, 'pages_checked': 0, 'success': False, 'error': None}
+            result = {'paths': [], 'pages_checked': 0, 'success': False, 'error': None}
 
             # Send start event
-            yield f"data: {json.dumps({'type': 'start', 'data': {'start': start_term, 'end': end_term}})}\n\n"
+            yield f"data: {json.dumps({'type': 'start', 'data': {'start': start_term, 'end': end_term, 'max_paths': search_request.max_paths}})}\n\n"
 
             # Resolve search terms to actual Wikipedia article titles
             yield f"data: {json.dumps({'type': 'resolving', 'data': {'message': 'Resolving search terms...'}})}\n\n"
@@ -645,31 +878,74 @@ async def find_path_stream(request: Request, search_request: SearchRequest):
 
                 # Store result data for database
                 if event_type == 'complete':
-                    result['path'] = event_data.get('path')
+                    result['paths'] = [event_data.get('path')]
                     result['pages_checked'] = event_data.get('pages_checked')
                     result['success'] = True
                     event_queue.put_nowait(None)  # Sentinel to stop
+                elif event_type == 'path_found':
+                    # Store each path as it's discovered
+                    result['paths'].append(event_data.get('path'))
+                    result['success'] = True
                 elif event_type == 'progress':
                     result['pages_checked'] = event_data.get('pages_checked', result['pages_checked'])
 
             # Run pathfinding in async task
             async def run_search():
                 try:
-                    path = await finder.find_path(actual_start, actual_end, callback=callback)
+                    # Use multi-path finder if max_paths > 1
+                    if search_request.max_paths > 1:
+                        paths = await finder.find_k_paths_bidirectional(
+                            actual_start,
+                            actual_end,
+                            max_paths=search_request.max_paths,
+                            min_diversity=search_request.min_diversity,
+                            callback=callback
+                        )
 
-                    # If path not found, send error
-                    if not path:
-                        error_event = {
-                            'type': 'error',
-                            'data': {
-                                'message': f'No path found within {finder.max_depth} hops',
-                                'pages_checked': len(finder.visited)
+                        # Send complete event for multi-path search
+                        if paths:
+                            complete_event = {
+                                'type': 'complete',
+                                'data': {
+                                    'path': paths[0],  # Shortest path
+                                    'pages_checked': len(finder.visited),
+                                    'paths_found': len(paths)
+                                }
                             }
-                        }
-                        event_queue.put_nowait(error_event)
-                        result['pages_checked'] = len(finder.visited)
-                        result['error'] = error_event['data']['message']
-                        event_queue.put_nowait(None)  # Sentinel
+                            event_queue.put_nowait(complete_event)
+                            result['pages_checked'] = len(finder.visited)
+                            result['success'] = True
+                            event_queue.put_nowait(None)  # Sentinel
+                        else:
+                            # No paths found
+                            error_event = {
+                                'type': 'error',
+                                'data': {
+                                    'message': f'No path found within {finder.max_depth} hops',
+                                    'pages_checked': len(finder.visited)
+                                }
+                            }
+                            event_queue.put_nowait(error_event)
+                            result['pages_checked'] = len(finder.visited)
+                            result['error'] = error_event['data']['message']
+                            event_queue.put_nowait(None)  # Sentinel
+                    else:
+                        path = await finder.find_path(actual_start, actual_end, callback=callback)
+                        paths = [path] if path else None
+
+                        # If no paths found, send error
+                        if not paths:
+                            error_event = {
+                                'type': 'error',
+                                'data': {
+                                    'message': f'No path found within {finder.max_depth} hops',
+                                    'pages_checked': len(finder.visited)
+                                }
+                            }
+                            event_queue.put_nowait(error_event)
+                            result['pages_checked'] = len(finder.visited)
+                            result['error'] = error_event['data']['message']
+                            event_queue.put_nowait(None)  # Sentinel
                 except Exception as e:
                     error_event = {
                         'type': 'error',
@@ -714,12 +990,14 @@ async def find_path_stream(request: Request, search_request: SearchRequest):
                 raise  # Re-raise to properly close the stream
 
             # Save to database
-            if result['success'] and result['path']:
+            if result['success'] and result['paths']:
+                # Save shortest path (for now, database schema will be updated later)
+                shortest_path = min(result['paths'], key=len) if result['paths'] else []
                 search_id = database.save_search(
                     start_term=start_term,
                     end_term=end_term,
-                    path=result['path'],
-                    hops=len(result['path']) - 1,
+                    path=shortest_path,
+                    hops=len(shortest_path) - 1,
                     pages_checked=result['pages_checked'],
                     success=True
                 )
@@ -801,6 +1079,11 @@ async def get_search(search_id: int):
         search['nodes'] = nodes
         search['edges'] = edges
 
+    # Include all paths if they exist
+    additional_paths = database.get_paths_for_search(search_id)
+    if additional_paths:
+        search['all_paths'] = additional_paths
+
     return search
 
 
@@ -817,6 +1100,21 @@ async def get_stats():
     """
     stats = database.get_search_stats()
     return stats
+
+
+@app.get('/api/cache/stats')
+async def get_cache_stats():
+    """
+    Get path cache statistics
+
+    Returns cache performance metrics including:
+    - Cache size and capacity
+    - Hit/miss rates
+    - Total requests
+    """
+    cache = get_cache()
+    return cache.get_stats()
+
 
 # Mount static files AFTER all routes
 app.mount("/static", StaticFiles(directory="static"), name="static")
