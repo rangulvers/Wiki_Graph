@@ -23,9 +23,9 @@ export class PathNode {
     }
 
     getColor() {
-        if (this.isStart) return '29, 232, 247'; // Cyan
-        if (this.isEnd) return '0, 255, 200'; // Green
-        return '179, 229, 255'; // Blue-white
+        if (this.isStart) return '34, 228, 255'; // Cyan (accent)
+        if (this.isEnd) return '0, 255, 191'; // Cyan-green (accent-strong)
+        return '179, 229, 255'; // Blue-white (intermediate nodes)
     }
 
     draw(ctx, isHovered = false, isHighlighted = false) {
@@ -84,7 +84,7 @@ export class PathNode {
         ctx.shadowBlur = 15;
         ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
 
-        ctx.fillStyle = 'rgba(17, 23, 62, 0.95)';
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
         ctx.beginPath();
         ctx.roundRect(tooltipX, tooltipY, tooltipWidth, tooltipHeight, 8);
         ctx.fill();
@@ -103,7 +103,7 @@ export class PathNode {
         ctx.fillText(this.label, this.x, tooltipY + 20);
 
         // Draw small arrow pointing to node
-        ctx.fillStyle = 'rgba(17, 23, 62, 0.95)';
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
         ctx.beginPath();
         ctx.moveTo(this.x, tooltipY + tooltipHeight);
         ctx.lineTo(this.x - 6, tooltipY + tooltipHeight);
