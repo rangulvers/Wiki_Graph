@@ -32,9 +32,10 @@ body {
         radial-gradient(circle at top, rgba(56, 189, 248, 0.08), transparent 55%),
         radial-gradient(circle at bottom, rgba(59, 130, 246, 0.12), transparent 55%),
         var(--bg);
-    padding: 40px 24px 80px;
+    padding: 40px 24px 60px;
     position: relative;
     overflow-x: hidden;
+    margin: 0;
 }
 
 #particles-js {
@@ -926,4 +927,24 @@ header h1 span {
     color: var(--accent);
     font-size: 13px;
     font-weight: 500;
+}
+
+/* Footer */
+.footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    text-align: center;
+    padding: 15px 20px;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    font-weight: 400;
+    background: var(--bg-elevated);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border-top: 1px solid var(--border-subtle);
+    z-index: 1000;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
 }
