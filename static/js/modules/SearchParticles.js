@@ -100,7 +100,7 @@ export class SearchParticles {
                 vy: (Math.random() - 0.5) * 0.5,
                 size: 0.8 + Math.random() * 1.2,
                 opacity: 0.2 + Math.random() * 0.2,
-                color: Math.random() > 0.5 ? '29, 232, 247' : '0, 255, 200', // Mix of cyan and green
+                color: Math.random() > 0.5 ? '34, 228, 255' : '0, 255, 191', // Mix of cyan and cyan-green
                 frozen: false
             });
         }
@@ -426,7 +426,7 @@ export class SearchParticles {
 
         const centerX = sourceNode.x;
         const centerY = sourceNode.y;
-        const color = direction === 'forward' ? '29, 232, 247' : '0, 255, 200'; // cyan : green
+        const color = direction === 'forward' ? '34, 228, 255' : '0, 255, 191'; // cyan : cyan-green
 
         for (let i = 0; i < count; i++) {
             // Shoot particles in random directions (full 360 degrees)
@@ -691,8 +691,8 @@ export class SearchParticles {
     }
 
     animate() {
-        // Fully clear the canvas each frame (no trails)
-        this.ctx.fillStyle = 'rgba(17, 23, 62, 1.0)';
+        // Fully clear the canvas each frame (no trails) - match new background
+        this.ctx.fillStyle = 'rgba(2, 6, 23, 1.0)';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
         // Update and draw background particles
@@ -794,10 +794,10 @@ export class SearchParticles {
             this.ctx.beginPath();
             this.ctx.moveTo(leftToCenter.startX, leftToCenter.y);
             this.ctx.lineTo(currentX, leftToCenter.y);
-            this.ctx.strokeStyle = 'rgba(29, 232, 247, 0.8)';
+            this.ctx.strokeStyle = 'rgba(34, 228, 255, 0.8)';
             this.ctx.lineWidth = 4;
             this.ctx.shadowBlur = 20;
-            this.ctx.shadowColor = 'rgba(29, 232, 247, 0.8)';
+            this.ctx.shadowColor = 'rgba(34, 228, 255, 0.8)';
             this.ctx.stroke();
             this.ctx.shadowBlur = 0;
         } else {
@@ -805,10 +805,10 @@ export class SearchParticles {
             this.ctx.beginPath();
             this.ctx.moveTo(leftToCenter.startX, leftToCenter.y);
             this.ctx.lineTo(leftToCenter.endX, leftToCenter.y);
-            this.ctx.strokeStyle = 'rgba(29, 232, 247, 0.8)';
+            this.ctx.strokeStyle = 'rgba(34, 228, 255, 0.8)';
             this.ctx.lineWidth = 4;
             this.ctx.shadowBlur = 20;
-            this.ctx.shadowColor = 'rgba(29, 232, 247, 0.8)';
+            this.ctx.shadowColor = 'rgba(34, 228, 255, 0.8)';
             this.ctx.stroke();
             this.ctx.shadowBlur = 0;
 
@@ -819,10 +819,10 @@ export class SearchParticles {
             this.ctx.beginPath();
             this.ctx.moveTo(centerToRight.startX, centerToRight.y);
             this.ctx.lineTo(currentX, centerToRight.y);
-            this.ctx.strokeStyle = 'rgba(0, 255, 200, 0.8)';
+            this.ctx.strokeStyle = 'rgba(0, 255, 191, 0.8)';
             this.ctx.lineWidth = 4;
             this.ctx.shadowBlur = 20;
-            this.ctx.shadowColor = 'rgba(0, 255, 200, 0.8)';
+            this.ctx.shadowColor = 'rgba(0, 255, 191, 0.8)';
             this.ctx.stroke();
             this.ctx.shadowBlur = 0;
         }
@@ -854,7 +854,7 @@ export class SearchParticles {
                 const opacity = baseOpacity * revealProgress;
 
                 this.ctx.save();
-                this.ctx.strokeStyle = `rgba(29, 232, 247, ${opacity})`;
+                this.ctx.strokeStyle = `rgba(34, 228, 255, ${opacity})`;
                 this.ctx.lineWidth = conn.thickness;
                 this.ctx.lineCap = 'round';
 
@@ -917,14 +917,14 @@ export class SearchParticles {
                 const opacity = isHighlighted ? 0.8 : 0.3;
 
                 this.ctx.save();
-                this.ctx.strokeStyle = `rgba(29, 232, 247, ${opacity})`;
+                this.ctx.strokeStyle = `rgba(34, 228, 255, ${opacity})`;
                 this.ctx.lineWidth = conn.thickness;
                 this.ctx.lineCap = 'round';
 
                 // Add glow for highlighted edges
                 if (isHighlighted) {
                     this.ctx.shadowBlur = 15;
-                    this.ctx.shadowColor = 'rgba(29, 232, 247, 0.8)';
+                    this.ctx.shadowColor = 'rgba(34, 228, 255, 0.8)';
                 }
 
                 this.ctx.beginPath();
@@ -961,7 +961,7 @@ export class SearchParticles {
                 const y = p.sourceNode.y + (p.targetNode.y - p.sourceNode.y) * p.progress;
 
                 // Draw particle with gradient color
-                const color = p.sourceNode.isStart ? '29, 232, 247' : '255, 255, 255';
+                const color = p.sourceNode.isStart ? '34, 228, 255' : '255, 255, 255';
 
                 this.ctx.beginPath();
                 this.ctx.arc(x, y, p.size, 0, Math.PI * 2);
@@ -1160,7 +1160,7 @@ export class SearchParticles {
                 vy: (Math.random() - 0.5) * 1.5,
                 size: 0.8 + Math.random() * 1.2,
                 opacity: 0.3 + Math.random() * 0.3,
-                color: Math.random() > 0.5 ? '29, 232, 247' : '0, 255, 200',
+                color: Math.random() > 0.5 ? '34, 228, 255' : '0, 255, 191',
                 targetNode: null
             });
         }
@@ -1260,14 +1260,14 @@ export class SearchParticles {
             const opacity = isHighlighted ? 0.8 : 0.3;
 
             ctx.save();
-            ctx.strokeStyle = `rgba(29, 232, 247, ${opacity})`;
+            ctx.strokeStyle = `rgba(34, 228, 255, ${opacity})`;
             ctx.lineWidth = edge.thickness;
             ctx.lineCap = 'round';
 
             // Add glow for highlighted edges
             if (isHighlighted) {
                 ctx.shadowBlur = 15;
-                ctx.shadowColor = 'rgba(29, 232, 247, 0.8)';
+                ctx.shadowColor = 'rgba(34, 228, 255, 0.8)';
             }
 
             ctx.beginPath();
