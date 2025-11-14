@@ -8,6 +8,8 @@ class SearchRequest(BaseModel):
     """Request model for path finding"""
     start: str = Field(..., min_length=1, max_length=200, description="Starting Wikipedia page")
     end: str = Field(..., min_length=1, max_length=200, description="Target Wikipedia page")
+    max_paths: int = Field(default=1, ge=1, le=5, description="Maximum number of paths to find (1-5)")
+    min_diversity: float = Field(default=0.3, ge=0.0, le=1.0, description="Minimum diversity between paths (0-1)")
 
     @field_validator('start', 'end')
     @classmethod
@@ -72,15 +74,28 @@ class Edge(BaseModel):
         populate_by_name = True
 
 
+class PathInfo(BaseModel):
+    """Information about a single path"""
+    path: List[str]
+    hops: int
+    nodes: List[Node]
+    edges: List[Edge]
+    diversity_score: Optional[float] = None  # Diversity vs other paths (0-1)
+    is_cached: bool = False
+    cache_segments: List[str] = []  # Which segments came from cache
+
+
 class SearchResponse(BaseModel):
     """Response model for successful path finding"""
     success: bool
     search_id: Optional[int] = None
-    path: List[str]
+    path: List[str]  # Keep for backwards compatibility (shortest path)
+    paths: Optional[List[PathInfo]] = None  # Multiple paths if max_paths > 1
     nodes: List[Node]
     edges: List[Edge]
     hops: int
     pages_checked: int
+    paths_found: Optional[int] = None  # Number of paths found
 
 
 class SearchErrorResponse(BaseModel):

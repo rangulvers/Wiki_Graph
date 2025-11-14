@@ -28,37 +28,40 @@ export class PathNode {
         return '179, 229, 255'; // Blue-white
     }
 
-    draw(ctx, isHovered = false) {
-        const pulse = this.isActive ? Math.sin(this.pulsePhase) * 0.3 + 0.7 : 1.0;
+    draw(ctx, isHovered = false, isHighlighted = false) {
+        const pulse = (this.isActive || isHighlighted) ? Math.sin(this.pulsePhase) * 0.3 + 0.7 : 1.0;
         const hoverScale = isHovered ? 1.3 : 1.0;
         const color = this.getColor();
 
-        // Draw glow (enhanced on hover)
-        ctx.shadowBlur = isHovered ? 40 : (this.isActive ? 30 : 15);
+        // Enhanced glow for highlighted nodes
+        const glowIntensity = isHighlighted ? 40 : (isHovered ? 40 : (this.isActive ? 30 : 15));
+        ctx.shadowBlur = glowIntensity;
         ctx.shadowColor = `rgba(${color}, ${this.opacity})`;
 
-        // Draw node (larger on hover)
+        // Draw node (larger on hover or highlight)
+        const sizeMultiplier = isHighlighted ? 1.2 : 1.0;
         ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius * pulse * hoverScale, 0, Math.PI * 2);
+        ctx.arc(this.x, this.y, this.radius * pulse * hoverScale * sizeMultiplier, 0, Math.PI * 2);
         ctx.fillStyle = `rgba(${color}, ${this.opacity})`;
         ctx.fill();
 
-        // Draw outer ring (brighter on hover)
+        // Draw outer ring (brighter on hover or highlight)
         ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius * pulse * hoverScale + 3, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(${color}, ${this.opacity * (isHovered ? 0.8 : 0.5)})`;
-        ctx.lineWidth = isHovered ? 3 : 2;
+        ctx.arc(this.x, this.y, this.radius * pulse * hoverScale * sizeMultiplier + 3, 0, Math.PI * 2);
+        const ringOpacity = isHighlighted ? 1.0 : (isHovered ? 0.8 : 0.5);
+        ctx.strokeStyle = `rgba(${color}, ${this.opacity * ringOpacity})`;
+        ctx.lineWidth = (isHovered || isHighlighted) ? 3 : 2;
         ctx.stroke();
 
         ctx.shadowBlur = 0;
 
-        // Draw label (always visible on hover)
-        const labelOpacity = isHovered ? 1.0 : this.labelOpacity;
+        // Draw label (always visible on hover or highlight)
+        const labelOpacity = (isHovered || isHighlighted) ? 1.0 : this.labelOpacity;
         if (labelOpacity > 0) {
-            ctx.font = isHovered ? 'bold 14px Inter' : '12px Inter';
+            ctx.font = (isHovered || isHighlighted) ? 'bold 14px Inter' : '12px Inter';
             ctx.fillStyle = `rgba(255, 255, 255, ${labelOpacity})`;
             ctx.textAlign = 'center';
-            ctx.fillText(this.label, this.x, this.y - (isHovered ? 25 : 20));
+            ctx.fillText(this.label, this.x, this.y - ((isHovered || isHighlighted) ? 25 : 20));
         }
 
         // Draw tooltip on hover
