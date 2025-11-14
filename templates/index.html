@@ -15,6 +15,29 @@
             <p class="subtitle">Find the shortest path between any two Wikipedia topics</p>
         </header>
 
+        <!-- Global Stats Bar -->
+        <div id="global-stats" class="stats-bar hidden">
+            <div class="stats-item">
+                <span class="stats-value" id="stat-total">-</span>
+                <span class="stats-label">searches</span>
+            </div>
+            <div class="stats-divider"></div>
+            <div class="stats-item">
+                <span class="stats-value" id="stat-success">-</span>
+                <span class="stats-label">success</span>
+            </div>
+            <div class="stats-divider"></div>
+            <div class="stats-item">
+                <span class="stats-value" id="stat-hops">-</span>
+                <span class="stats-label">avg hops</span>
+            </div>
+            <div class="stats-divider"></div>
+            <div class="stats-item">
+                <span class="stats-value" id="stat-pages">-</span>
+                <span class="stats-label">avg pages</span>
+            </div>
+        </div>
+
         <div class="search-container">
             <div class="input-group">
                 <div class="input-wrapper">
@@ -104,7 +127,7 @@
     </div>
 
     <footer class="footer">
-        Built with ❤️ and just for fun
+        Built with ❤️ and just for fun | <a href="https://github.com/rangulvers/Wiki_Graph" target="_blank" rel="noopener noreferrer">GitHub</a>
     </footer>
 
     <script type="module" src="/static/js/modules/main.js"></script>

@@ -12,6 +12,7 @@ import { findConnection } from './searchApi.js';
 import { loadSearchHistory, setupHistorySearch } from './historyManager.js';
 import { setupAutocomplete, currentDropdown } from './autocomplete.js';
 import { initParticles } from './utils.js';
+import { loadGlobalStats } from './statsManager.js';
 
 // Make findConnection available globally for inline onclick handler in HTML
 window.findConnection = findConnection;
@@ -35,6 +36,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Setup history search filter
     setupHistorySearch();
+
+    // Load global statistics
+    loadGlobalStats();
 
     // Initialize particle background
     initParticles();
