@@ -4,7 +4,8 @@ A modern web application that finds the shortest path between any two Wikipedia 
 
 🔗 **Live Demo**: [https://wikigraph.up.railway.app](https://wikigraph.up.railway.app)
 
-<img width="1295" alt="Wikipedia Connection Finder Demo" src="https://github.com/user-attachments/assets/54e78793-5a13-4d52-87a1-921a44c43631" />
+<img width="1616" height="1191" alt="image" src="https://github.com/user-attachments/assets/b53905c6-ccc6-4427-a1ad-052732e2390f" />
+
 
 ## ✨ Features
 
