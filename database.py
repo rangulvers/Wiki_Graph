@@ -1,10 +1,14 @@
 import sqlite3
 import json
 import time
+import os
 from datetime import datetime
 from contextlib import contextmanager
 
-DATABASE_NAME = 'wikipedia_searches.db'
+# Use /data directory for Railway persistent storage
+DATA_DIR = os.environ.get('DATA_DIR', '/data')
+os.makedirs(DATA_DIR, exist_ok=True)
+DATABASE_NAME = os.path.join(DATA_DIR, 'wikipedia_searches.db')
 
 @contextmanager
 def get_db():
