@@ -29,6 +29,8 @@ export class SearchParticles {
         this.pathConnections = [];
         this.connectionIndex = 0;
         this.connectionParticles = [];
+        this.currentBeam = null; // Growing beam animation state
+        this.completedConnections = []; // Track which connections have finished animating
         this.animationState = 'SEARCHING'; // SEARCHING, CONNECTING, REVEALING, COMPLETE
 
         // Mouse interaction state
@@ -77,6 +79,9 @@ export class SearchParticles {
         this.pathConnections = [];
         this.connectionIndex = 0;
         this.connectionParticles = [];
+        this.currentBeam = null; // Clear growing beam from previous search
+        this.completedConnections = []; // Clear completed connections from previous search
+        this.flowingLights = []; // Clear flowing lights from previous search
         this.animationState = 'SEARCHING';
 
         // Create start and end nodes in their final positions immediately
@@ -465,54 +470,30 @@ export class SearchParticles {
         const sourceNode = this.pathNodes[this.connectionIndex];
         const targetNode = this.pathNodes[this.connectionIndex + 1];
 
-        // Create particle beam from source to target
-        const beamParticleCount = 20;
-        this.connectionParticles = [];
+        // Store connection info for growing line animation
+        this.currentBeam = {
+            sourceNode: sourceNode,
+            targetNode: targetNode,
+            progress: 0,
+            startTime: Date.now(),
+            duration: 400 // 400ms to grow line
+        };
 
-        for (let i = 0; i < beamParticleCount; i++) {
-            this.connectionParticles.push({
-                progress: i / beamParticleCount,
-                speed: 0.05,
-                sourceNode: sourceNode,
-                targetNode: targetNode,
-                size: 2 + Math.random() * 2
-            });
-        }
-
-        // Wait for beam to reach target, then continue
+        // Wait for beam to complete, then continue
         setTimeout(() => {
             targetNode.isActive = true;
             sourceNode.isActive = false;
 
-            // Create pulse effect at target
-            this.createPulseEffect(targetNode);
+            // Mark this connection as completed (for drawing static line)
+            this.completedConnections.push(this.connectionIndex);
 
             // Move to next connection
             this.connectionIndex++;
-            setTimeout(() => this.animateNextConnection(), 300);
-        }, 500);
+            this.currentBeam = null;
+            setTimeout(() => this.animateNextConnection(), 200);
+        }, 450);
     }
 
-    createPulseEffect(node) {
-        let pulseRadius = 0;
-        const maxRadius = 30;
-        const pulseInterval = setInterval(() => {
-            pulseRadius += 2;
-            if (pulseRadius > maxRadius) {
-                clearInterval(pulseInterval);
-            }
-        }, 16);
-
-        // Store pulse for rendering
-        node.pulseRadius = 0;
-        node.pulseAnimation = setInterval(() => {
-            node.pulseRadius = (node.pulseRadius || 0) + 2;
-            if (node.pulseRadius > maxRadius) {
-                clearInterval(node.pulseAnimation);
-                delete node.pulseRadius;
-            }
-        }, 16);
-    }
 
 
     startAmbientParticles() {
@@ -548,24 +529,32 @@ export class SearchParticles {
     }
 
     startGraphEdgeAnimation() {
-        // Initialize simultaneous animation for all edges in graph mode
-        this.edgeRevealStartTime = Date.now();
-        this.edgeRevealDuration = 1000; // 1 second for all edges to reveal
+        // Initialize sequential growing line animation for graph mode
+        this.edgeAnimationDuration = 400; // 400ms per edge to grow
 
-        // Create beam particles for all edges simultaneously
+        // Track animation state for each edge
         this.pathConnections.forEach(conn => {
-            const beamParticleCount = 15;
+            conn.animationState = 'pending'; // pending, animating, complete
+            conn.animationStartTime = null;
+            conn.animationProgress = 0;
+        });
 
-            for (let i = 0; i < beamParticleCount; i++) {
-                this.connectionParticles.push({
-                    progress: i / beamParticleCount,
-                    speed: 0.04,
-                    connection: conn,
-                    sourceNode: conn.from,
-                    targetNode: conn.to,
-                    size: 2 + Math.random() * 2,
-                    startDelay: Math.random() * 200 // Stagger start times slightly
-                });
+        // Mark start node as active to begin propagation
+        const startNode = this.pathNodes.find(n => n.isStart);
+        if (startNode) {
+            startNode.beamReached = true;
+            // Start all edges from start node
+            this.activateEdgesFromNode(startNode);
+        }
+    }
+
+    activateEdgesFromNode(node) {
+        // Start animating all edges that originate from this node
+        const now = Date.now();
+        this.pathConnections.forEach(conn => {
+            if (conn.from === node && conn.animationState === 'pending') {
+                conn.animationState = 'animating';
+                conn.animationStartTime = now;
             }
         });
     }
@@ -841,55 +830,70 @@ export class SearchParticles {
     }
 
     drawPathAnimation() {
-        // Handle REVEALING state (graph mode simultaneous edge animation)
+        // Handle REVEALING state (graph mode sequential edge animation)
         if (this.animationState === 'REVEALING') {
-            const elapsed = Date.now() - this.edgeRevealStartTime;
-            const revealProgress = Math.min(elapsed / this.edgeRevealDuration, 1.0);
+            const now = Date.now();
+            let allComplete = true;
 
-            // Draw all edges with fade-in effect
+            // Update and draw each edge based on its individual state
             this.pathConnections.forEach(conn => {
-                const isHighlighted = this.highlightedPathIndex >= 0 &&
-                    conn.pathIndices.includes(this.highlightedPathIndex);
-                const baseOpacity = isHighlighted ? 0.8 : 0.3;
-                const opacity = baseOpacity * revealProgress;
+                if (conn.animationState === 'animating') {
+                    // Calculate progress for this specific edge
+                    const elapsed = now - conn.animationStartTime;
+                    conn.animationProgress = Math.min(elapsed / this.edgeAnimationDuration, 1.0);
 
-                this.ctx.save();
-                this.ctx.strokeStyle = `rgba(34, 228, 255, ${opacity})`;
-                this.ctx.lineWidth = conn.thickness;
-                this.ctx.lineCap = 'round';
+                    // Check if this edge just completed
+                    if (conn.animationProgress >= 1.0) {
+                        conn.animationState = 'complete';
+                        conn.to.beamReached = true;
+                        // Activate edges from the target node
+                        this.activateEdgesFromNode(conn.to);
+                    } else {
+                        allComplete = false;
+                    }
+                } else if (conn.animationState === 'pending') {
+                    allComplete = false;
+                }
 
-                this.ctx.beginPath();
-                this.ctx.moveTo(conn.from.x, conn.from.y);
-                this.ctx.lineTo(conn.to.x, conn.to.y);
-                this.ctx.stroke();
+                // Draw the edge based on its state
+                if (conn.animationState === 'animating' || conn.animationState === 'complete') {
+                    const progress = conn.animationState === 'complete' ? 1.0 : conn.animationProgress;
 
-                this.ctx.restore();
-            });
+                    this.ctx.save();
+                    this.ctx.lineCap = 'round';
 
-            // Draw beam particles along all edges
-            this.connectionParticles.forEach(p => {
-                p.progress = Math.min(p.progress + p.speed, 1.0);
+                    // Calculate current end point
+                    const dx = conn.to.x - conn.from.x;
+                    const dy = conn.to.y - conn.from.y;
+                    const currentX = conn.from.x + dx * progress;
+                    const currentY = conn.from.y + dy * progress;
 
-                if (p.progress <= 1.0 && p.connection) {
-                    const x = p.sourceNode.x + (p.targetNode.x - p.sourceNode.x) * p.progress;
-                    const y = p.sourceNode.y + (p.targetNode.y - p.sourceNode.y) * p.progress;
-
-                    const color = '179, 229, 255';
+                    // Draw growing beam (brighter during animation)
+                    if (conn.animationState === 'animating') {
+                        this.ctx.strokeStyle = 'rgba(179, 229, 255, 1.0)';
+                        this.ctx.lineWidth = conn.thickness + 2;
+                        this.ctx.shadowBlur = 15;
+                        this.ctx.shadowColor = 'rgba(179, 229, 255, 0.8)';
+                    } else {
+                        // Completed edge - static line
+                        this.ctx.strokeStyle = 'rgba(179, 229, 255, 0.5)';
+                        this.ctx.lineWidth = conn.thickness;
+                        this.ctx.shadowBlur = 0;
+                    }
 
                     this.ctx.beginPath();
-                    this.ctx.arc(x, y, p.size, 0, Math.PI * 2);
-                    this.ctx.fillStyle = `rgba(${color}, ${1.0 - p.progress * 0.5})`;
-                    this.ctx.shadowBlur = 10;
-                    this.ctx.shadowColor = `rgba(${color}, 0.8)`;
-                    this.ctx.fill();
+                    this.ctx.moveTo(conn.from.x, conn.from.y);
+                    this.ctx.lineTo(currentX, currentY);
+                    this.ctx.stroke();
+
                     this.ctx.shadowBlur = 0;
+                    this.ctx.restore();
                 }
             });
 
-            // Transition to COMPLETE when animation finishes
-            if (revealProgress >= 1.0) {
+            // Transition to COMPLETE when all edges are done
+            if (allComplete) {
                 this.animationState = 'COMPLETE';
-                this.connectionParticles = []; // Clear beam particles
                 this.startFlowingLights(); // Start flowing lights
             }
 
@@ -935,43 +939,51 @@ export class SearchParticles {
                 this.ctx.restore();
             });
         } else {
-            // Original single-path mode: draw connection lines between completed nodes
-            for (let i = 0; i < this.pathNodes.length - 1; i++) {
-                if (i < this.connectionIndex) {
-                    const node1 = this.pathNodes[i];
-                    const node2 = this.pathNodes[i + 1];
+            // Original single-path mode: draw static lines only for completed connections
+            this.completedConnections.forEach(connIndex => {
+                if (connIndex < this.pathNodes.length - 1) {
+                    const node1 = this.pathNodes[connIndex];
+                    const node2 = this.pathNodes[connIndex + 1];
 
-                    // Draw connection line
+                    // Draw completed connection line
                     this.ctx.beginPath();
                     this.ctx.moveTo(node1.x, node1.y);
                     this.ctx.lineTo(node2.x, node2.y);
-                    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                    this.ctx.strokeStyle = 'rgba(179, 229, 255, 0.5)';
                     this.ctx.lineWidth = 2;
                     this.ctx.stroke();
                 }
-            }
+            });
         }
 
-        // Draw connection particles (beam effect)
-        this.connectionParticles.forEach(p => {
-            p.progress = Math.min(p.progress + p.speed, 1.0);
+        // Draw growing beam for current connection (single-path mode)
+        if (this.currentBeam) {
+            const elapsed = Date.now() - this.currentBeam.startTime;
+            const beamProgress = Math.min(elapsed / this.currentBeam.duration, 1.0);
 
-            if (p.progress <= 1.0) {
-                const x = p.sourceNode.x + (p.targetNode.x - p.sourceNode.x) * p.progress;
-                const y = p.sourceNode.y + (p.targetNode.y - p.sourceNode.y) * p.progress;
+            const source = this.currentBeam.sourceNode;
+            const target = this.currentBeam.targetNode;
 
-                // Draw particle with gradient color
-                const color = p.sourceNode.isStart ? '34, 228, 255' : '255, 255, 255';
+            const dx = target.x - source.x;
+            const dy = target.y - source.y;
+            const currentX = source.x + dx * beamProgress;
+            const currentY = source.y + dy * beamProgress;
 
-                this.ctx.beginPath();
-                this.ctx.arc(x, y, p.size, 0, Math.PI * 2);
-                this.ctx.fillStyle = `rgba(${color}, ${1.0 - p.progress * 0.5})`;
-                this.ctx.shadowBlur = 10;
-                this.ctx.shadowColor = `rgba(${color}, 0.8)`;
-                this.ctx.fill();
-                this.ctx.shadowBlur = 0;
-            }
-        });
+            // Draw growing beam line
+            this.ctx.save();
+            this.ctx.lineCap = 'round';
+            this.ctx.strokeStyle = 'rgba(179, 229, 255, 1.0)';
+            this.ctx.lineWidth = 3;
+            this.ctx.shadowBlur = 15;
+            this.ctx.shadowColor = 'rgba(179, 229, 255, 0.8)';
+
+            this.ctx.beginPath();
+            this.ctx.moveTo(source.x, source.y);
+            this.ctx.lineTo(currentX, currentY);
+            this.ctx.stroke();
+
+            this.ctx.restore();
+        }
 
         // Draw all nodes
         this.pathNodes.forEach(node => {

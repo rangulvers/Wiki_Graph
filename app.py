@@ -13,7 +13,7 @@ import json
 import database
 import asyncio
 import re
-from typing import Optional, TypeVar, Callable, Any
+from typing import Optional, TypeVar, Callable, Any, List
 from functools import wraps
 import logging
 from models import (
@@ -152,10 +152,10 @@ async def get_shared_http_client() -> httpx.AsyncClient:
             pool=5.0       # Time to acquire connection from pool
         )
 
-        # Configure connection pooling limits
+        # Configure connection pooling limits (increased for high-performance parallel operations)
         limits = httpx.Limits(
-            max_connections=100,        # Max total connections
-            max_keepalive_connections=20  # Max idle connections to keep alive
+            max_connections=500,        # Max total connections (increased from 100)
+            max_keepalive_connections=100  # Max idle connections to keep alive (increased from 20)
         )
 
         # Create shared client with proper configuration
@@ -186,6 +186,7 @@ class WikipediaPathFinder:
         self.max_depth = max_depth
         self.visited = set()
         self.client = None
+        self._edge_cache = {}  # Cache for edge validation: (from_normalized, to_normalized) -> bool
 
     async def __aenter__(self):
         """Async context manager entry - get shared HTTP client"""
@@ -214,7 +215,8 @@ class WikipediaPathFinder:
             "pllimit": "max",
             "format": "json",
             "plnamespace": 0,  # Only article links
-            "formatversion": 2  # Use modern format
+            "formatversion": 2,  # Use modern format
+            "redirects": 1  # Automatically resolve redirects
         }
 
         try:
@@ -260,7 +262,8 @@ class WikipediaPathFinder:
             "bllimit": min(limit, 500),  # Max 500 per request
             "format": "json",
             "blnamespace": 0,  # Only article links
-            "formatversion": 2
+            "formatversion": 2,
+            "blredirect": 1  # Resolve redirects for backlinks
         }
 
         try:
@@ -337,6 +340,9 @@ class WikipediaPathFinder:
         Returns:
             List of paths, each path is a list of page titles
         """
+        # Clear edge cache at start of new search to prevent unbounded growth
+        self._edge_cache.clear()
+
         start_normalized = self.normalize_title(start)
         end_normalized = self.normalize_title(end)
 
@@ -384,6 +390,12 @@ class WikipediaPathFinder:
                 if links is None:
                     continue
 
+                # Cache all edges from this page during BFS (optimization)
+                current_normalized = self.normalize_title(current_page)
+                links_normalized = [self.normalize_title(link) for link in links]
+                for link_norm in links_normalized:
+                    self._edge_cache[(current_normalized, link_norm)] = True
+
                 for link in links:
                     link_normalized = self.normalize_title(link)
 
@@ -392,6 +404,8 @@ class WikipediaPathFinder:
                         forward_path = path + [link]
                         backward_path = self._reconstruct_backward_path(link_normalized, backward_parents)
                         new_path = forward_path + backward_path
+
+                        # No validation needed for forward meeting - BFS already verified all edges exist
 
                         # Track shortest path length
                         if shortest_path_length is None:
@@ -425,6 +439,13 @@ class WikipediaPathFinder:
 
                 links = await self.get_wikipedia_backlinks(current_page, limit=300)
 
+                # Cache all backlink edges during BFS (optimization)
+                # Backlinks mean: link → current_page (reverse direction)
+                current_normalized = self.normalize_title(current_page)
+                for link in links:
+                    link_normalized = self.normalize_title(link)
+                    self._edge_cache[(link_normalized, current_normalized)] = True
+
                 for link in links:
                     link_normalized = self.normalize_title(link)
 
@@ -432,6 +453,12 @@ class WikipediaPathFinder:
                     if link_normalized in forward_visited:
                         forward_path = self._reconstruct_forward_path(link_normalized, forward_parents)
                         new_path = forward_path + path
+
+                        # Validate path before accepting it
+                        is_valid = await self._validate_path(new_path)
+                        if not is_valid:
+                            logger.warning(f"Skipping invalid path with {len(new_path)} nodes (backward meeting)")
+                            continue
 
                         if shortest_path_length is None:
                             shortest_path_length = len(new_path)
@@ -469,10 +496,6 @@ class WikipediaPathFinder:
                 })
                 last_event_time = current_time
                 nodes_since_last_event = 0
-
-            # Small delay to be nice to Wikipedia's servers
-            if pages_checked % 10 == 0:
-                await asyncio.sleep(0.05)
 
         # Sort paths by length (shortest first)
         found_paths.sort(key=len)
@@ -513,6 +536,9 @@ class WikipediaPathFinder:
             end: Target Wikipedia page title
             callback: Optional function(event_type, data) for streaming updates
         """
+        # Clear edge cache at start of new search to prevent unbounded growth
+        self._edge_cache.clear()
+
         start_normalized = self.normalize_title(start)
         end_normalized = self.normalize_title(end)
 
@@ -552,6 +578,12 @@ class WikipediaPathFinder:
                 if links is None:
                     continue
 
+                # Cache all edges from this page during BFS (optimization)
+                current_normalized = self.normalize_title(current_page)
+                links_normalized = [self.normalize_title(link) for link in links]
+                for link_norm in links_normalized:
+                    self._edge_cache[(current_normalized, link_norm)] = True
+
                 for link in links:
                     link_normalized = self.normalize_title(link)
 
@@ -559,6 +591,9 @@ class WikipediaPathFinder:
                     if link_normalized in backward_visited:
                         # Reconstruct path: forward + reversed backward
                         final_path = path + [link] + self._reconstruct_backward_path(link_normalized, backward_parents)
+
+                        # No validation needed for forward meeting - BFS already verified all edges exist
+
                         if callback:
                             callback('complete', {
                                 'path': final_path,
@@ -583,6 +618,13 @@ class WikipediaPathFinder:
                 # Get backward links (backlinks)
                 links = await self.get_wikipedia_backlinks(current_page, limit=300)
 
+                # Cache all backlink edges during BFS (optimization)
+                # Backlinks mean: link → current_page (reverse direction)
+                current_normalized = self.normalize_title(current_page)
+                for link in links:
+                    link_normalized = self.normalize_title(link)
+                    self._edge_cache[(link_normalized, current_normalized)] = True
+
                 for link in links:
                     link_normalized = self.normalize_title(link)
 
@@ -590,6 +632,13 @@ class WikipediaPathFinder:
                     if link_normalized in forward_visited:
                         # Reconstruct path: forward + reversed backward
                         final_path = self._reconstruct_forward_path(link_normalized, forward_parents) + path
+
+                        # Validate path before returning it
+                        is_valid = await self._validate_path(final_path)
+                        if not is_valid:
+                            logger.warning(f"Skipping invalid path from backward meeting, continuing search...")
+                            continue  # Continue searching for a valid path
+
                         if callback:
                             callback('complete', {
                                 'path': final_path,
@@ -624,10 +673,6 @@ class WikipediaPathFinder:
                 last_event_time = current_time
                 nodes_since_last_event = 0
 
-            # Small delay to be nice to Wikipedia's servers
-            if pages_checked % 10 == 0:
-                await asyncio.sleep(0.05)
-
         return None  # No path found
 
     def _reconstruct_forward_path(self, meeting_point, parents):
@@ -652,6 +697,110 @@ class WikipediaPathFinder:
             path.append(original_title)
             current = parent_normalized
         return path
+
+    async def _validate_edge(self, from_page: str, to_page: str) -> bool:
+        """
+        Validate a single edge (from_page → to_page) with caching
+
+        Checks if to_page exists in from_page's outbound links.
+        Caches all edges from from_page for future lookups.
+
+        Args:
+            from_page: Source Wikipedia page title
+            to_page: Target Wikipedia page title
+
+        Returns:
+            True if edge exists, False otherwise
+        """
+        from_normalized = self.normalize_title(from_page)
+        to_normalized = self.normalize_title(to_page)
+        cache_key = (from_normalized, to_normalized)
+
+        # Check cache first
+        if cache_key in self._edge_cache:
+            logger.debug(f"Edge cache HIT: {from_page} → {to_page}")
+            return self._edge_cache[cache_key]
+
+        logger.debug(f"Edge cache MISS: {from_page} → {to_page}, fetching links...")
+
+        # Fetch links from source page
+        try:
+            links = await self.get_wikipedia_links(from_page)
+
+            if links is None:
+                logger.warning(f"Could not fetch links from '{from_page}' for edge validation")
+                self._edge_cache[cache_key] = False
+                return False
+
+            # Cache ALL edges from this page (not just the one we're checking)
+            links_normalized = [self.normalize_title(link) for link in links]
+            for link_norm in links_normalized:
+                self._edge_cache[(from_normalized, link_norm)] = True
+
+            # Check if our specific edge exists
+            edge_exists = to_normalized in links_normalized
+
+            # Cache negative result if edge doesn't exist
+            if not edge_exists:
+                self._edge_cache[cache_key] = False
+
+            logger.debug(f"Cached {len(links_normalized)} edges from '{from_page}'")
+            return edge_exists
+
+        except Exception as e:
+            logger.error(f"Error validating edge {from_page} → {to_page}: {e}")
+            self._edge_cache[cache_key] = False
+            return False
+
+    async def _validate_path(self, path: List[str]) -> bool:
+        """
+        Validate that each edge in the path actually exists on Wikipedia
+
+        For a path [A, B, C], this verifies:
+        - A's outbound links contain B
+        - B's outbound links contain C
+
+        This catches invalid paths generated by bidirectional BFS bugs.
+
+        Args:
+            path: List of Wikipedia page titles
+
+        Returns:
+            True if all edges are valid, False otherwise
+        """
+        if not path or len(path) < 2:
+            return True  # Single page or empty path is trivially valid
+
+        logger.info(f"Validating path with {len(path)-1} edges: {' → '.join(path[:3])}{'...' if len(path) > 3 else ''}")
+
+        # Build list of validation tasks for all edges
+        validation_tasks = []
+        for i in range(len(path) - 1):
+            validation_tasks.append(self._validate_edge(path[i], path[i + 1]))
+
+        # Validate all edges in parallel
+        try:
+            results = await asyncio.gather(*validation_tasks, return_exceptions=True)
+
+            # Check results
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    logger.error(f"Exception validating edge {path[i]} → {path[i+1]}: {result}")
+                    return False
+                elif result is False:
+                    logger.warning(
+                        f"Path validation FAILED at edge {i+1}/{len(path)-1}: "
+                        f"'{path[i]}' does not link to '{path[i+1]}'"
+                    )
+                    return False
+
+            # All edges validated successfully
+            logger.info(f"✓ Path validated successfully: {' → '.join(path)}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error during parallel path validation: {e}")
+            return False
 
     async def find_path(self, start, end, callback=None):
         """Find shortest path between two Wikipedia pages
