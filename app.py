@@ -500,6 +500,9 @@ class WikipediaPathFinder:
         # Sort paths by length (shortest first)
         found_paths.sort(key=len)
 
+        # Update self.visited with total pages checked for statistics
+        self.visited = forward_visited | backward_visited
+
         return found_paths if found_paths else None
 
     def _is_diverse_path(self, new_path, existing_paths, min_diversity):
@@ -594,6 +597,9 @@ class WikipediaPathFinder:
 
                         # No validation needed for forward meeting - BFS already verified all edges exist
 
+                        # Update self.visited with total pages checked for statistics
+                        self.visited = forward_visited | backward_visited
+
                         if callback:
                             callback('complete', {
                                 'path': final_path,
@@ -639,6 +645,9 @@ class WikipediaPathFinder:
                             logger.warning(f"Skipping invalid path from backward meeting, continuing search...")
                             continue  # Continue searching for a valid path
 
+                        # Update self.visited with total pages checked for statistics
+                        self.visited = forward_visited | backward_visited
+
                         if callback:
                             callback('complete', {
                                 'path': final_path,
@@ -672,6 +681,9 @@ class WikipediaPathFinder:
 
                 last_event_time = current_time
                 nodes_since_last_event = 0
+
+        # Update self.visited with total pages checked for statistics
+        self.visited = forward_visited | backward_visited
 
         return None  # No path found
 
