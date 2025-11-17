@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, Query
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
@@ -1081,6 +1081,26 @@ class WikipediaPathFinder:
 async def index(request: Request):
     """Serve the main HTML page"""
     return templates.TemplateResponse("index.html", {"request": request})
+
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+async def robots():
+    """Serve robots.txt for search engine crawlers"""
+    try:
+        with open("static/robots.txt", "r") as f:
+            return f.read()
+    except FileNotFoundError:
+        # Fallback if file doesn't exist
+        return """User-agent: *
+Allow: /
+Disallow: /api/
+Sitemap: https://wikigraph.up.railway.app/sitemap.xml"""
+
+
+@app.get("/sitemap.xml")
+async def sitemap():
+    """Serve sitemap.xml for search engines"""
+    return FileResponse("static/sitemap.xml", media_type="application/xml")
 
 
 @app.post("/find-path")

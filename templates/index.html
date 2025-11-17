@@ -3,10 +3,97 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wikipedia Connection Finder</title>
+
+    <!-- Primary Meta Tags -->
+    <title>Wikipedia Connection Finder - Find Shortest Path Between Articles</title>
+    <meta name="title" content="Wikipedia Connection Finder - Find Shortest Path Between Articles">
+    <meta name="description" content="Find the shortest path between any two Wikipedia articles. Interactive bidirectional search with real-time visualization and knowledge graph. Play the six degrees of Wikipedia game!">
+    <meta name="keywords" content="wikipedia path finder, six degrees of wikipedia, wikipedia connection, wikipedia game, bidirectional search, knowledge graph, wikipedia links, article path">
+    <meta name="author" content="Wikipedia Connection Finder">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://wikigraph.up.railway.app/">
+
+    <!-- Theme Color -->
+    <meta name="theme-color" content="#22e4ff">
+    <meta name="msapplication-TileColor" content="#020617">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://wikigraph.up.railway.app/">
+    <meta property="og:title" content="Wikipedia Connection Finder - Find Shortest Path Between Articles">
+    <meta property="og:description" content="Find the shortest path between any two Wikipedia articles. Interactive bidirectional search with real-time visualization and knowledge graph.">
+    <meta property="og:image" content="https://wikigraph.up.railway.app/static/images/og-image.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:site_name" content="Wikipedia Connection Finder">
+    <meta property="og:locale" content="en_US">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://wikigraph.up.railway.app/">
+    <meta property="twitter:title" content="Wikipedia Connection Finder - Find Shortest Path Between Articles">
+    <meta property="twitter:description" content="Find the shortest path between any two Wikipedia articles. Interactive bidirectional search with real-time visualization and knowledge graph.">
+    <meta property="twitter:image" content="https://wikigraph.up.railway.app/static/images/og-image.png">
+
+    <!-- Favicon (placeholder paths - will update when logo is processed) -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/images/icons/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/images/icons/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/images/icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/static/images/icons/android-chrome-192x192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/static/images/icons/android-chrome-512x512.png">
+
+    <!-- Performance Optimization -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="preconnect" href="https://d3js.org">
+    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+    <link rel="dns-prefetch" href="https://d3js.org">
+    <link rel="dns-prefetch" href="https://en.wikipedia.org">
+
     <link rel="stylesheet" href="/static/css/style.css">
     <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
+
+    <!-- Structured Data (JSON-LD) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Wikipedia Connection Finder",
+      "alternateName": "WikiGraph",
+      "url": "https://wikigraph.up.railway.app/",
+      "description": "Find the shortest path between any two Wikipedia articles using intelligent bidirectional search with real-time visualization and knowledge graph.",
+      "applicationCategory": "UtilityApplication",
+      "operatingSystem": "Web Browser",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "screenshot": "https://wikigraph.up.railway.app/static/images/og-image.png",
+      "featureList": [
+        "Bidirectional BFS search algorithm",
+        "Real-time path visualization",
+        "Interactive knowledge graph with D3.js",
+        "Cache-aware pathfinding",
+        "Multi-path discovery",
+        "Search history tracking"
+      ],
+      "browserRequirements": "Requires JavaScript. Requires HTML5.",
+      "softwareVersion": "1.0.0",
+      "author": {
+        "@type": "Organization",
+        "name": "Wikipedia Connection Finder",
+        "url": "https://github.com/rangulvers/Wiki_Graph"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Wikipedia Connection Finder",
+        "url": "https://github.com/rangulvers/Wiki_Graph"
+      },
+      "inLanguage": "en-US",
+      "isAccessibleForFree": true
+    }
+    </script>
 </head>
 <body>
     <div id="particles-js"></div>

@@ -1,0 +1,11 @@
+# robots.txt for Wikipedia Connection Finder
+# Allow all search engines to crawl the site
+
+User-agent: *
+Allow: /
+
+# Don't crawl API endpoints
+Disallow: /api/
+
+# Sitemap location
+Sitemap: https://wikigraph.up.railway.app/sitemap.xml
