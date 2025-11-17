@@ -27,12 +27,14 @@ export class GraphView {
         // Main group for zoom/pan
         this.g = this.svg.append('g');
 
-        // Initialize force simulation
+        // Initialize force simulation with stronger repulsion for better spread
         this.simulation = d3.forceSimulation()
-            .force('link', d3.forceLink().id(d => d.id).distance(100))
-            .force('charge', d3.forceManyBody().strength(-200))
+            .force('link', d3.forceLink().id(d => d.id).distance(150))  // Increased link distance
+            .force('charge', d3.forceManyBody().strength(-800))  // Much stronger repulsion
             .force('center', d3.forceCenter(this.width / 2, this.height / 2))
-            .force('collision', d3.forceCollide().radius(30));
+            .force('collision', d3.forceCollide().radius(d => 30 + Math.sqrt(d.connections) * 2))  // Dynamic collision based on node size
+            .force('x', d3.forceX(this.width / 2).strength(0.05))  // Gentle pull toward center X
+            .force('y', d3.forceY(this.height / 2).strength(0.05));  // Gentle pull toward center Y
     }
 
     /**
@@ -205,6 +207,17 @@ export class GraphView {
                 <span style="color: #22e4ff; font-weight: 700;">${stats.total_nodes}</span> pages |
                 <span style="color: #22e4ff; font-weight: 700;">${stats.total_edges}</span> connections
             `;
+        }
+    }
+
+    /**
+     * Reset layout by restarting the simulation with full force
+     */
+    resetLayout() {
+        if (this.simulation) {
+            // Restart simulation with high alpha to re-spread nodes
+            this.simulation.alpha(1).restart();
+            console.log('Graph layout reset - nodes spreading out...');
         }
     }
 

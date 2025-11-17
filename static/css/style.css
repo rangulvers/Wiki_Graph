@@ -563,6 +563,14 @@ header h1 span {
     margin-bottom: 20px;
     flex-wrap: wrap;
     gap: 15px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.history-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
 .history-header h2 {
@@ -570,6 +578,50 @@ header h1 span {
     margin: 0;
     font-weight: 700;
     text-shadow: 0 0 20px rgba(34, 228, 255, 0.3);
+    transition: color var(--transition-fast);
+}
+
+.history-header:hover h2 {
+    color: var(--accent-strong);
+}
+
+.history-toggle-btn {
+    background: transparent;
+    border: none;
+    color: var(--accent);
+    cursor: pointer;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-fast);
+    border-radius: 6px;
+}
+
+.history-toggle-btn:hover {
+    background: rgba(34, 228, 255, 0.1);
+}
+
+.toggle-icon {
+    font-size: 12px;
+    transition: transform 0.3s ease;
+    display: inline-block;
+}
+
+.history-toggle-btn.expanded .toggle-icon {
+    transform: rotate(180deg);
+}
+
+.history-content {
+    max-height: 600px;
+    overflow: hidden;
+    transition: max-height 0.4s ease-out, opacity 0.3s ease-out;
+    opacity: 1;
+}
+
+.history-content.collapsed {
+    max-height: 0;
+    opacity: 0;
 }
 
 .history-controls {
@@ -1066,6 +1118,50 @@ header h1 span {
 }
 
 /* Graph View Styles */
+.graph-intro {
+    background: var(--bg-elevated);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--border-subtle);
+    padding: 20px 24px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-soft);
+}
+
+.graph-intro h3 {
+    color: var(--accent);
+    margin: 0 0 12px 0;
+    font-size: 1.3rem;
+    font-weight: 700;
+    text-shadow: 0 0 15px rgba(34, 228, 255, 0.4);
+}
+
+.graph-intro p {
+    color: var(--text);
+    line-height: 1.6;
+    margin: 0 0 12px 0;
+    font-size: 0.95rem;
+}
+
+.graph-intro p:last-child {
+    margin-bottom: 0;
+}
+
+.graph-intro strong {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.graph-hint {
+    background: rgba(34, 228, 255, 0.08);
+    border-left: 3px solid var(--accent);
+    padding: 10px 14px;
+    border-radius: var(--radius-lg);
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
 .graph-controls {
     display: flex;
     justify-content: space-between;
@@ -1077,7 +1173,13 @@ header h1 span {
     border: 1px solid var(--border-subtle);
 }
 
-.btn-refresh {
+.graph-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-refresh,
+.btn-reset {
     padding: 10px 20px;
     background: linear-gradient(90deg, var(--accent), var(--accent-strong));
     color: var(--bg);
@@ -1092,12 +1194,20 @@ header h1 span {
     box-shadow: 0 4px 15px rgba(34, 228, 255, 0.3);
 }
 
-.btn-refresh:hover {
+.btn-reset {
+    background: linear-gradient(90deg, rgba(34, 228, 255, 0.2), rgba(0, 255, 191, 0.2));
+    color: var(--accent);
+    border: 1px solid var(--accent);
+}
+
+.btn-refresh:hover,
+.btn-reset:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 25px rgba(34, 228, 255, 0.5);
 }
 
-.btn-refresh:active {
+.btn-refresh:active,
+.btn-reset:active {
     transform: translateY(0);
 }
 

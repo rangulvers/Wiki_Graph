@@ -61,6 +61,33 @@ function refreshGraph() {
     }
 }
 
+/**
+ * Reset the graph layout to spread nodes out
+ */
+function resetGraphLayout() {
+    if (graphView) {
+        graphView.resetLayout();
+    }
+}
+
+/**
+ * Toggle search history collapse/expand
+ */
+function toggleHistory() {
+    const historyContent = document.getElementById('historyContent');
+    const toggleBtn = document.getElementById('historyToggleBtn');
+
+    if (historyContent.classList.contains('collapsed')) {
+        // Expand
+        historyContent.classList.remove('collapsed');
+        toggleBtn.classList.add('expanded');
+    } else {
+        // Collapse
+        historyContent.classList.add('collapsed');
+        toggleBtn.classList.remove('expanded');
+    }
+}
+
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
     // Setup autocomplete for both search fields
@@ -79,8 +106,16 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('searchViewBtn').addEventListener('click', () => switchView('search'));
     document.getElementById('graphViewBtn').addEventListener('click', () => switchView('graph'));
 
-    // Setup graph refresh button
+    // Setup graph control buttons
     document.getElementById('refreshGraphBtn').addEventListener('click', refreshGraph);
+    document.getElementById('resetLayoutBtn').addEventListener('click', resetGraphLayout);
+
+    // Setup history toggle
+    document.getElementById('historyToggleHeader').addEventListener('click', toggleHistory);
+    document.getElementById('historyToggleBtn').addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent double trigger
+        toggleHistory();
+    });
 
     // Load search history on page load
     loadSearchHistory();

@@ -47,8 +47,24 @@
 
         <!-- Graph View Panel (hidden by default) -->
         <div id="graphViewPanel" class="panel hidden">
+            <div class="graph-intro">
+                <h3>Knowledge Graph</h3>
+                <p>
+                    This interactive visualization shows all <strong>cached path segments</strong> discovered from previous searches.
+                    Each <strong>node</strong> represents a Wikipedia page, sized by its number of connections and colored by usage frequency
+                    (<span style="color: #00ffbf;">hot</span> = frequently used,
+                    <span style="color: #64748b;">cold</span> = rarely used).
+                    <strong>Edges</strong> show discovered connections between pages, with thickness indicating how often that path has been reused.
+                </p>
+                <p class="graph-hint">
+                    💡 <strong>Tip:</strong> Drag nodes to reposition, scroll to zoom, and hover for details.
+                </p>
+            </div>
             <div class="graph-controls">
-                <button id="refreshGraphBtn" class="btn-refresh">Refresh Graph</button>
+                <div class="graph-buttons">
+                    <button id="refreshGraphBtn" class="btn-refresh">Refresh Graph</button>
+                    <button id="resetLayoutBtn" class="btn-reset">Reset Layout</button>
+                </div>
                 <span id="graphStats" class="graph-stats-text"></span>
             </div>
             <div id="graphContainer" class="graph-container"></div>
@@ -128,20 +144,27 @@
         <div id="error" class="error hidden"></div>
 
         <div class="history-section">
-            <div class="history-header">
-                <h2>Search History</h2>
+            <div class="history-header" id="historyToggleHeader">
+                <div class="history-header-left">
+                    <h2>Search History</h2>
+                    <button id="historyToggleBtn" class="history-toggle-btn" aria-label="Toggle history">
+                        <span class="toggle-icon">▼</span>
+                    </button>
+                </div>
                 <div class="history-controls">
                     <input type="text" id="history-search" placeholder="Filter searches..." />
                     <button onclick="loadSearchHistory()">Refresh</button>
                 </div>
             </div>
 
-            <div id="history-loading" class="loading hidden">
-                <div class="spinner"></div>
-                <p>Loading history...</p>
-            </div>
+            <div id="historyContent" class="history-content collapsed">
+                <div id="history-loading" class="loading hidden">
+                    <div class="spinner"></div>
+                    <p>Loading history...</p>
+                </div>
 
-            <div id="history-list" class="history-list"></div>
+                <div id="history-list" class="history-list"></div>
+            </div>
         </div>
         </div>
         <!-- End Search View Panel -->
