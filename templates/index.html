@@ -6,6 +6,7 @@
     <title>Wikipedia Connection Finder</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
 <body>
     <div id="particles-js"></div>
@@ -14,6 +15,12 @@
             <h1>Wikipedia Connection Finder</h1>
             <p class="subtitle">Find the shortest path between any two Wikipedia topics</p>
         </header>
+
+        <!-- Navigation Tabs -->
+        <div class="nav-tabs">
+            <button id="searchViewBtn" class="nav-tab active">Search</button>
+            <button id="graphViewBtn" class="nav-tab">Knowledge Graph</button>
+        </div>
 
         <!-- Global Stats Bar -->
         <div id="global-stats" class="stats-bar hidden">
@@ -38,6 +45,18 @@
             </div>
         </div>
 
+        <!-- Graph View Panel (hidden by default) -->
+        <div id="graphViewPanel" class="panel hidden">
+            <div class="graph-controls">
+                <button id="refreshGraphBtn" class="btn-refresh">Refresh Graph</button>
+                <span id="graphStats" class="graph-stats-text"></span>
+            </div>
+            <div id="graphContainer" class="graph-container"></div>
+            <div id="graph-tooltip" class="graph-tooltip"></div>
+        </div>
+
+        <!-- Search View Panel (visible by default) -->
+        <div id="searchViewPanel" class="panel">
         <div class="search-container">
             <div class="input-group">
                 <div class="input-wrapper">
@@ -124,6 +143,8 @@
 
             <div id="history-list" class="history-list"></div>
         </div>
+        </div>
+        <!-- End Search View Panel -->
     </div>
 
     <footer class="footer">

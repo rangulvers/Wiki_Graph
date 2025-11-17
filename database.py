@@ -106,6 +106,13 @@ def init_db():
         cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_path_segments_last_used ON path_segments(last_used DESC)
         ''')
+        # Index for reverse lookups (cache composition queries)
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_path_segments_end_page ON path_segments(end_page)
+        ''')
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_path_segments_start_page ON path_segments(start_page)
+        ''')
 
 def save_search(start_term, end_term, path, hops, pages_checked, success, error_message=None, max_retries=3):
     """
@@ -134,8 +141,8 @@ def save_search(start_term, end_term, path, hops, pages_checked, success, error_
             with get_db() as conn:
                 cursor = conn.cursor()
 
-                # Convert path list to JSON string
-                path_json = json.dumps(path) if path else None
+                # Convert path list to JSON string (never NULL, use empty array for empty paths)
+                path_json = json.dumps(path if path is not None else [])
 
                 cursor.execute('''
                     INSERT INTO searches
@@ -342,6 +349,80 @@ def get_path_segment(start_page, end_page):
             ''', (start_page, end_page))
             return json.loads(row['segment_path'])
         return None
+
+def save_path_segments_bulk(segments, max_retries=3):
+    """
+    Save multiple path segments in a single transaction with retry logic
+
+    This is much more efficient than calling save_path_segment() multiple times
+    because it uses a single database connection and transaction for all segments.
+
+    Args:
+        segments: List of (start_page, end_page, segment_path) tuples
+        max_retries: Maximum retry attempts for database lock errors (default: 3)
+
+    Returns:
+        int: Number of segments successfully saved
+
+    Raises:
+        sqlite3.OperationalError: If database remains locked after all retries
+    """
+    last_exception = None
+
+    for attempt in range(max_retries):
+        try:
+            with get_db() as conn:
+                cursor = conn.cursor()
+                saved_count = 0
+
+                for start_page, end_page, segment_path in segments:
+                    # Check if segment already exists
+                    cursor.execute('''
+                        SELECT id FROM path_segments
+                        WHERE start_page = ? AND end_page = ?
+                    ''', (start_page, end_page))
+
+                    existing = cursor.fetchone()
+
+                    if existing:
+                        # Update use count and last_used timestamp
+                        cursor.execute('''
+                            UPDATE path_segments
+                            SET use_count = use_count + 1,
+                                last_used = CURRENT_TIMESTAMP
+                            WHERE id = ?
+                        ''', (existing['id'],))
+                    else:
+                        # Insert new segment
+                        segment_json = json.dumps(segment_path)
+                        cursor.execute('''
+                            INSERT INTO path_segments
+                            (start_page, end_page, segment_path, hops)
+                            VALUES (?, ?, ?, ?)
+                        ''', (start_page, end_page, segment_json, len(segment_path) - 1))
+
+                    saved_count += 1
+
+                # All segments saved in single transaction
+                return saved_count
+
+        except sqlite3.OperationalError as e:
+            last_exception = e
+            # Check if it's a lock/busy error
+            error_str = str(e).lower()
+            if 'locked' in error_str or 'busy' in error_str:
+                if attempt < max_retries - 1:
+                    # Exponential backoff: 0.1s, 0.2s, 0.4s
+                    sleep_time = 0.1 * (2 ** attempt)
+                    print(f"Database locked during bulk segment save, retrying in {sleep_time}s (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(sleep_time)
+                    continue
+            # If not a lock error, or last attempt, raise immediately
+            raise
+
+    # If we exhausted all retries, raise the last exception
+    if last_exception:
+        raise last_exception
 
 def cleanup_old_segments(days_old=30, max_segments=10000):
     """

@@ -74,6 +74,15 @@ class Edge(BaseModel):
         populate_by_name = True
 
 
+class SegmentSource(BaseModel):
+    """Metadata about where a path segment came from"""
+    from_page: str
+    to_page: str
+    source: str  # 'cache' or 'bfs'
+    cached_at: Optional[str] = None  # ISO timestamp if from cache
+    discovered_at: Optional[str] = None  # ISO timestamp if from BFS
+
+
 class PathInfo(BaseModel):
     """Information about a single path"""
     path: List[str]
@@ -83,6 +92,11 @@ class PathInfo(BaseModel):
     diversity_score: Optional[float] = None  # Diversity vs other paths (0-1)
     is_cached: bool = False
     cache_segments: List[str] = []  # Which segments came from cache
+    cache_hit_type: Optional[str] = None  # 'direct', 'composed', 'miss'
+    segments_used: Optional[int] = None  # Number of cached segments used
+    time_saved_ms: Optional[int] = None  # Estimated time saved by cache
+    segment_sources: Optional[List[SegmentSource]] = None  # Detailed segment tracking
+    cache_effectiveness: Optional[float] = None  # 0-100 percentage of cached segments
 
 
 class SearchResponse(BaseModel):

@@ -49,19 +49,26 @@ class PathCache:
         logger.info(f"PathCache initialized with max_size={max_size}, db_persistence={enable_db_persistence}")
 
     def _make_key(self, start_page: str, end_page: str) -> str:
-        """Create cache key from page pair"""
-        return f"{start_page}::{end_page}"
+        """
+        Create normalized cache key from page pair
+
+        Normalizes titles to lowercase and replaces underscores with spaces
+        for case-insensitive matching, while cached values retain original titles.
+        """
+        start_normalized = start_page.strip().replace("_", " ").lower()
+        end_normalized = end_page.strip().replace("_", " ").lower()
+        return f"{start_normalized}::{end_normalized}"
 
     def get(self, start_page: str, end_page: str) -> Optional[List[str]]:
         """
         Retrieve a cached path segment
 
         Args:
-            start_page: Starting page title (normalized)
-            end_page: Ending page title (normalized)
+            start_page: Starting page title (will be normalized for cache key)
+            end_page: Ending page title (will be normalized for cache key)
 
         Returns:
-            List of pages in the segment, or None if not cached
+            List of pages in the segment with original Wikipedia titles, or None if not cached
         """
         key = self._make_key(start_page, end_page)
 
@@ -91,9 +98,9 @@ class PathCache:
         Store a path segment in the cache
 
         Args:
-            start_page: Starting page title (normalized)
-            end_page: Ending page title (normalized)
-            segment_path: List of pages in the segment
+            start_page: Starting page title (will be normalized for cache key)
+            end_page: Ending page title (will be normalized for cache key)
+            segment_path: List of pages in segment with original Wikipedia titles
         """
         with self._lock:
             self._put_internal(start_page, end_page, segment_path, update_db=True)
@@ -131,16 +138,27 @@ class PathCache:
 
     def bulk_put(self, segments: List[Tuple[str, str, List[str]]]):
         """
-        Store multiple segments efficiently
+        Store multiple segments efficiently using a single database transaction
 
         Args:
             segments: List of (start_page, end_page, segment_path) tuples
         """
         with self._lock:
+            # Update in-memory cache first (fast)
             for start_page, end_page, segment_path in segments:
-                self._put_internal(start_page, end_page, segment_path, update_db=True)
+                self._put_internal(start_page, end_page, segment_path, update_db=False)
 
-        logger.info(f"Bulk inserted {len(segments)} segments")
+            # Batch save to database in single transaction (efficient)
+            if self.enable_db_persistence and segments:
+                try:
+                    saved_count = database.save_path_segments_bulk(segments)
+                    logger.info(f"Bulk saved {saved_count}/{len(segments)} segments to database")
+                except Exception as e:
+                    logger.error(f"Failed to bulk save segments to database: {e}", exc_info=True)
+                    # Don't raise - in-memory cache is still updated, database is best-effort
+                    # Future: Could implement retry queue or warning to user
+
+        logger.info(f"Bulk cached {len(segments)} segments in memory")
 
     def warm_cache_from_db(self, limit: int = 1000):
         """
@@ -243,6 +261,167 @@ class PathCache:
                 'hit_rate': round(hit_rate, 2),
                 'total_requests': total_requests
             }
+
+    def get_connected_nodes(self, page: str, direction: str = 'both') -> List[str]:
+        """
+        Get all pages connected to the given page in cached segments
+
+        Args:
+            page: Page title (normalized)
+            direction: 'forward' (page→X), 'backward' (X→page), or 'both' (default)
+
+        Returns:
+            List of connected page titles
+        """
+        connected = set()
+
+        with self._lock:
+            # Check in-memory cache
+            for key, segment in self._cache.items():
+                start, end = key.split('::', 1)
+                if direction in ('forward', 'both') and start == page:
+                    connected.add(end)
+                if direction in ('backward', 'both') and end == page:
+                    connected.add(start)
+
+        # Also check database for connections not in memory
+        if self.enable_db_persistence:
+            try:
+                with database.get_db() as conn:
+                    cursor = conn.cursor()
+
+                    if direction in ('forward', 'both'):
+                        cursor.execute('''
+                            SELECT end_page FROM path_segments
+                            WHERE start_page = ?
+                            ORDER BY use_count DESC
+                            LIMIT 50
+                        ''', (page,))
+                        for row in cursor.fetchall():
+                            connected.add(row['end_page'])
+
+                    if direction in ('backward', 'both'):
+                        cursor.execute('''
+                            SELECT start_page FROM path_segments
+                            WHERE end_page = ?
+                            ORDER BY use_count DESC
+                            LIMIT 50
+                        ''', (page,))
+                        for row in cursor.fetchall():
+                            connected.add(row['start_page'])
+
+            except Exception as e:
+                logger.error(f"Failed to query connected nodes from database: {e}")
+
+        return list(connected)
+
+    def compose_path(self, start_page: str, end_page: str, max_hops: int = 3):
+        """
+        Attempt to compose a path from cached segments
+
+        Uses BFS over cached segments to find a path.
+
+        Args:
+            start_page: Starting page (will be normalized for cache key)
+            end_page: Ending page (will be normalized for cache key)
+            max_hops: Maximum number of hops to try (default: 3)
+
+        Returns:
+            Tuple of (path, segment_metadata) if found, or (None, None) if not cached
+            Path contains original Wikipedia titles. segment_metadata is list of dicts
+            with 'from_page', 'to_page', 'source', 'cached_at'
+        """
+        # Direct segment check
+        direct = self.get(start_page, end_page)
+        if direct:
+            logger.info(f"Cache composition: Direct hit {start_page} → {end_page}")
+            # Get timestamp from database
+            cached_at = self._get_segment_timestamp(start_page, end_page)
+            segment_metadata = [{
+                'from_page': start_page,
+                'to_page': end_page,
+                'source': 'cache',
+                'cached_at': cached_at
+            }]
+            return (direct, segment_metadata)
+
+        # BFS over cached segments
+        from collections import deque
+
+        queue = deque([(start_page, [start_page], 0, [])])  # Add metadata tracking
+        visited = {start_page}
+
+        while queue:
+            current, path, hops, metadata = queue.popleft()
+
+            if hops >= max_hops:
+                continue
+
+            # Get all pages connected to current via cached segments
+            connected = self.get_connected_nodes(current, direction='forward')
+
+            for next_page in connected:
+                if next_page in visited:
+                    continue
+
+                # Get segment from current to next_page
+                segment = self.get(current, next_page)
+                if not segment:
+                    continue
+
+                # Build new path
+                new_path = path + segment[1:]  # Skip first node (it's current)
+
+                # Track segment metadata
+                cached_at = self._get_segment_timestamp(current, next_page)
+                new_metadata = metadata + [{
+                    'from_page': current,
+                    'to_page': next_page,
+                    'source': 'cache',
+                    'cached_at': cached_at
+                }]
+
+                # Check if we've reached the end
+                if next_page == end_page:
+                    logger.info(f"Cache composition: Found path with {hops + 1} cached segments")
+                    return (new_path, new_metadata)
+
+                visited.add(next_page)
+                queue.append((next_page, new_path, hops + 1, new_metadata))
+
+        return (None, None)
+
+    def _get_segment_timestamp(self, start_page: str, end_page: str) -> Optional[str]:
+        """
+        Get the timestamp when a segment was cached
+
+        Args:
+            start_page: Starting page (normalized)
+            end_page: Ending page (normalized)
+
+        Returns:
+            ISO format timestamp string, or None if not found
+        """
+        if not self.enable_db_persistence:
+            return None
+
+        try:
+            with database.get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT created_at FROM path_segments
+                    WHERE start_page = ? AND end_page = ?
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                ''', (start_page, end_page))
+
+                row = cursor.fetchone()
+                if row:
+                    return row['created_at']
+        except Exception as e:
+            logger.error(f"Failed to get segment timestamp: {e}")
+
+        return None
 
     def clear(self):
         """Clear all cached segments"""
