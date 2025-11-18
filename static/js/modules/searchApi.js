@@ -11,6 +11,7 @@
 import { SearchParticles } from './SearchParticles.js';
 import { showElement, hideElement, showError, escapeHtml } from './utils.js';
 import { loadSearchHistory } from './historyManager.js';
+import { initShareButton } from './shareManager.js';
 
 // Global search particles instance
 export let searchParticles = null;
@@ -19,6 +20,10 @@ export let searchParticles = null;
 let allPaths = [];
 let currentPathIndex = 0;
 let mergedGraph = null;
+
+// Store resolved search terms for sharing
+let resolvedStartTerm = '';
+let resolvedEndTerm = '';
 
 export async function findConnection() {
     const startTerm = document.getElementById('start-term').value.trim();
@@ -160,6 +165,10 @@ function handleLiveEvent(event) {
             break;
 
         case 'resolved':
+            // Store resolved terms for sharing
+            resolvedStartTerm = data.start;
+            resolvedEndTerm = data.end;
+
             // Show what we're actually searching for
             document.querySelector('.search-title').textContent = `Searching Wikipedia...`;
 
@@ -285,6 +294,15 @@ async function transitionToGraph(data) {
 
     // Display path list
     displayPathList(data.path);
+
+    // Initialize share button
+    initShareButton({
+        startTerm: resolvedStartTerm,
+        endTerm: resolvedEndTerm,
+        pathCount: allPaths.length,
+        hops: data.path.length - 1,
+        pagesChecked: data.pages_checked
+    });
 }
 
 function showPathSelector() {
