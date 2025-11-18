@@ -29,6 +29,12 @@ export function escapeHtml(text) {
 }
 
 export function initParticles() {
+    // Check if particlesJS is loaded from CDN
+    if (typeof particlesJS === 'undefined') {
+        console.warn('particlesJS library not loaded - skipping particle background');
+        return;
+    }
+
     particlesJS('particles-js', {
         particles: {
             number: {

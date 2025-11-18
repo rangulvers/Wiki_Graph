@@ -4,4 +4,4 @@
 source .venv/bin/activate
 
 # Start Flask server
-python app/main.py
+uvicorn app.main:app --reload

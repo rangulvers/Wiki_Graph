@@ -28,10 +28,10 @@ from app.utils import normalize_title
 # Type variable for generic async function decorator
 T = TypeVar('T')
 
-# Configure structured logging
+# Configure logging to match Uvicorn's clean style
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format='%(levelname)-8s %(name)s - %(message)s',
     handlers=[
         logging.StreamHandler()
     ]

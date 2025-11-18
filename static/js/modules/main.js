@@ -8,6 +8,7 @@
  * - Configures event listeners
  * - Makes findConnection globally available
  * - Manages navigation between Search and Graph views
+ * - Shows console easter egg for developers
  */
 import { findConnection } from './searchApi.js';
 import { loadSearchHistory, setupHistorySearch } from './historyManager.js';
@@ -15,6 +16,7 @@ import { setupAutocomplete, currentDropdown } from './autocomplete.js';
 import { initParticles } from './utils.js';
 import { loadGlobalStats } from './statsManager.js';
 import { GraphView } from '../graphView.js';
+import { showConsoleArt } from './consoleArt.js';
 
 // Make findConnection available globally for inline onclick handler in HTML
 window.findConnection = findConnection;
@@ -151,4 +153,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initialize particle background
     initParticles();
+
+    // Show console easter egg for developers 👋
+    showConsoleArt();
 });
