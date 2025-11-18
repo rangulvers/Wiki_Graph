@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Primary Meta Tags -->
+    <title>Search - Wikipedia Connection Finder</title>
+    <meta name="title" content="Search - Wikipedia Connection Finder">
+    <meta name="description" content="Search for the shortest path between any two Wikipedia articles. Real-time bidirectional search with interactive visualization.">
+    <meta name="keywords" content="wikipedia search, find wikipedia path, article connection search, wikipedia tool">
+    <meta name="author" content="Wikipedia Connection Finder">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://wikigraph.up.railway.app/search">
+
+    <!-- Theme Color -->
+    <meta name="theme-color" content="#22e4ff">
+    <meta name="msapplication-TileColor" content="#020617">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://wikigraph.up.railway.app/search">
+    <meta property="og:title" content="Search - Wikipedia Connection Finder">
+    <meta property="og:description" content="Search for the shortest path between any two Wikipedia articles. Real-time bidirectional search with interactive visualization.">
+    <meta property="og:image" content="https://wikigraph.up.railway.app/static/images/og-image.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:site_name" content="Wikipedia Connection Finder">
+    <meta property="og:locale" content="en_US">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://wikigraph.up.railway.app/search">
+    <meta property="twitter:title" content="Search - Wikipedia Connection Finder">
+    <meta property="twitter:description" content="Search for the shortest path between any two Wikipedia articles. Real-time bidirectional search with interactive visualization.">
+    <meta property="twitter:image" content="https://wikigraph.up.railway.app/static/images/og-image.png">
+
+    <!-- Favicon (placeholder paths - will update when logo is processed) -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/images/icons/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/images/icons/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/images/icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/static/images/icons/android-chrome-192x192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/static/images/icons/android-chrome-512x512.png">
+
+    <!-- Performance Optimization -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="preconnect" href="https://d3js.org">
+    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+    <link rel="dns-prefetch" href="https://d3js.org">
+    <link rel="dns-prefetch" href="https://en.wikipedia.org">
+
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+
+    <!-- Structured Data (JSON-LD) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Wikipedia Connection Finder",
+      "alternateName": "WikiGraph",
+      "url": "https://wikigraph.up.railway.app/",
+      "description": "Find the shortest path between any two Wikipedia articles using intelligent bidirectional search with real-time visualization and knowledge graph.",
+      "applicationCategory": "UtilityApplication",
+      "operatingSystem": "Web Browser",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "screenshot": "https://wikigraph.up.railway.app/static/images/og-image.png",
+      "featureList": [
+        "Bidirectional BFS search algorithm",
+        "Real-time path visualization",
+        "Interactive knowledge graph with D3.js",
+        "Cache-aware pathfinding",
+        "Multi-path discovery",
+        "Search history tracking"
+      ],
+      "browserRequirements": "Requires JavaScript. Requires HTML5.",
+      "softwareVersion": "1.0.0",
+      "author": {
+        "@type": "Organization",
+        "name": "Wikipedia Connection Finder",
+        "url": "https://github.com/rangulvers/Wiki_Graph"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Wikipedia Connection Finder",
+        "url": "https://github.com/rangulvers/Wiki_Graph"
+      },
+      "inLanguage": "en-US",
+      "isAccessibleForFree": true
+    }
+    </script>
+
+    <!-- Google Analytics 4 (GA4) - Replace G-XXXXXXXXXX with your Measurement ID -->
+    <!-- Uncomment the following lines and add your GA4 Measurement ID to enable analytics:
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-XXXXXXXXXX');
+    </script>
+    -->
+</head>
+<body>
+    <div id="particles-js"></div>
+    <div class="container">
+        <header>
+            <h1>Wikipedia Connection Finder</h1>
+            <p class="subtitle">Find the shortest path between any two Wikipedia topics</p>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <div class="nav-tabs">
+            <button id="searchViewBtn" class="nav-tab active">Search</button>
+            <button id="graphViewBtn" class="nav-tab">Knowledge Graph</button>
+        </div>
+
+        <!-- Global Stats Bar -->
+        <div id="global-stats" class="stats-bar hidden">
+            <div class="stats-item">
+                <span class="stats-value" id="stat-total">-</span>
+                <span class="stats-label">searches</span>
+            </div>
+            <div class="stats-divider"></div>
+            <div class="stats-item">
+                <span class="stats-value" id="stat-success">-</span>
+                <span class="stats-label">success</span>
+            </div>
+            <div class="stats-divider"></div>
+            <div class="stats-item">
+                <span class="stats-value" id="stat-hops">-</span>
+                <span class="stats-label">avg hops</span>
+            </div>
+            <div class="stats-divider"></div>
+            <div class="stats-item">
+                <span class="stats-value" id="stat-pages">-</span>
+                <span class="stats-label">avg pages</span>
+            </div>
+        </div>
+
+        <!-- Graph View Panel (hidden by default) -->
+        <div id="graphViewPanel" class="panel hidden">
+            <div class="graph-intro">
+                <h3>Knowledge Graph</h3>
+                <p>
+                    This interactive visualization shows all <strong>cached path segments</strong> discovered from previous searches.
+                    Each <strong>node</strong> represents a Wikipedia page, sized by its number of connections and colored by usage frequency
+                    (<span style="color: #00ffbf;">hot</span> = frequently used,
+                    <span style="color: #64748b;">cold</span> = rarely used).
+                    <strong>Edges</strong> show discovered connections between pages, with thickness indicating how often that path has been reused.
+                </p>
+                <p class="graph-hint">
+                    💡 <strong>Tip:</strong> Drag nodes to reposition, scroll to zoom, and hover for details.
+                </p>
+            </div>
+            <div class="graph-controls">
+                <div class="graph-buttons">
+                    <button id="refreshGraphBtn" class="btn-refresh">Refresh Graph</button>
+                    <button id="resetLayoutBtn" class="btn-reset">Reset Layout</button>
+                </div>
+                <span id="graphStats" class="graph-stats-text"></span>
+            </div>
+            <div id="graphContainer" class="graph-container"></div>
+            <div id="graph-tooltip" class="graph-tooltip"></div>
+        </div>
+
+        <!-- Search View Panel (visible by default) -->
+        <div id="searchViewPanel" class="panel">
+        <div class="search-container">
+            <div class="input-group">
+                <div class="input-wrapper">
+                    <label for="start-term">Start Term</label>
+                    <input type="text" id="start-term" placeholder="e.g., Harry Potter" autocomplete="off">
+                    <div id="start-suggestions" class="autocomplete-dropdown hidden"></div>
+                </div>
+                <div class="arrow">→</div>
+                <div class="input-wrapper">
+                    <label for="end-term">End Term</label>
+                    <input type="text" id="end-term" placeholder="e.g., NBA" autocomplete="off">
+                    <div id="end-suggestions" class="autocomplete-dropdown hidden"></div>
+                </div>
+            </div>
+            <button id="find-btn" onclick="findConnection()">Find Connection</button>
+        </div>
+
+        <div id="loading" class="loading hidden">
+            <canvas id="live-search-canvas"></canvas>
+            <div class="live-search-overlay">
+                <p class="search-title">Searching Wikipedia...</p>
+                <div id="live-status" class="live-status">
+                    <div class="stat-row">
+                        <span class="stat-label">Forward:</span>
+                        <strong id="live-forward-depth">0</strong>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Backward:</span>
+                        <strong id="live-backward-depth">0</strong>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Total:</span>
+                        <strong id="live-depth">0</strong>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Pages:</span>
+                        <strong id="live-pages">0</strong>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Speed:</span>
+                        <strong id="live-speed">0</strong> <span class="stat-unit">pages/sec</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results overlay (shown after animation completes) -->
+            <div id="results" class="results hidden">
+                <!-- Stats overlay on canvas -->
+                <div id="results-stats-overlay" class="stats-overlay">
+                    <div class="stat-item">
+                        <div class="stat-value" id="hops-count">0</div>
+                        <div class="stat-label">Hops</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="pages-count">0</div>
+                        <div class="stat-label">Pages Checked</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Path details panel (below canvas) -->
+        <div id="path-details-container" class="path-details-panel hidden">
+            <h3>Path Details</h3>
+            <div id="path-details" class="path-list"></div>
+            <button id="new-search-btn" onclick="location.reload()">New Search</button>
+        </div>
+
+        <div id="error" class="error hidden"></div>
+
+        <div class="history-section">
+            <div class="history-header" id="historyToggleHeader">
+                <div class="history-header-left">
+                    <h2>Search History</h2>
+                    <button id="historyToggleBtn" class="history-toggle-btn" aria-label="Toggle history">
+                        <span class="toggle-icon">▼</span>
+                    </button>
+                </div>
+                <div class="history-controls">
+                    <input type="text" id="history-search" placeholder="Filter searches..." />
+                    <button onclick="loadSearchHistory()">Refresh</button>
+                </div>
+            </div>
+
+            <div id="historyContent" class="history-content collapsed">
+                <div id="history-loading" class="loading hidden">
+                    <div class="spinner"></div>
+                    <p>Loading history...</p>
+                </div>
+
+                <div id="history-list" class="history-list"></div>
+            </div>
+        </div>
+        </div>
+        <!-- End Search View Panel -->
+    </div>
+
+    <footer class="footer">
+        Built with ❤️ and just for fun |
+        <a href="/">About</a> |
+        <a href="/#faq">FAQ</a> |
+        <a href="https://github.com/rangulvers/Wiki_Graph" target="_blank" rel="noopener noreferrer">GitHub</a>
+    </footer>
+
+    <script type="module" src="/static/js/modules/main.js"></script>
+</body>
+</html>

@@ -90,9 +90,32 @@ function toggleHistory() {
 
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
+    // Check for URL parameters to pre-fill search form
+    const urlParams = new URLSearchParams(window.location.search);
+    const startParam = urlParams.get('start');
+    const endParam = urlParams.get('end');
+
+    let autoTriggerSearch = false;
+
+    if (startParam) {
+        document.getElementById('start-term').value = decodeURIComponent(startParam);
+        autoTriggerSearch = true;
+    }
+    if (endParam) {
+        document.getElementById('end-term').value = decodeURIComponent(endParam);
+    }
+
     // Setup autocomplete for both search fields
     setupAutocomplete('start-term', 'start-suggestions');
     setupAutocomplete('end-term', 'end-suggestions');
+
+    // Auto-trigger search if both parameters are present (from example links)
+    if (autoTriggerSearch && startParam && endParam) {
+        // Small delay to ensure DOM is fully ready
+        setTimeout(() => {
+            findConnection();
+        }, 100);
+    }
 
     // Allow Enter key to trigger search (only if autocomplete dropdown is not open)
     document.getElementById('start-term').addEventListener('keypress', function(e) {

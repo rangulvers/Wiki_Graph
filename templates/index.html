@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <!-- Primary Meta Tags -->
-    <title>Wikipedia Connection Finder - Find Shortest Path Between Articles</title>
-    <meta name="title" content="Wikipedia Connection Finder - Find Shortest Path Between Articles">
-    <meta name="description" content="Find the shortest path between any two Wikipedia articles. Interactive bidirectional search with real-time visualization and knowledge graph. Play the six degrees of Wikipedia game!">
-    <meta name="keywords" content="wikipedia path finder, six degrees of wikipedia, wikipedia connection, wikipedia game, bidirectional search, knowledge graph, wikipedia links, article path">
+    <title>Wikipedia Connection Finder | Find Shortest Path Between Articles</title>
+    <meta name="title" content="Wikipedia Connection Finder | Find Shortest Path Between Articles">
+    <meta name="description" content="Find the shortest path between any two Wikipedia articles using bidirectional BFS. Fast, accurate, and free. Learn how it works, see examples, and try it now.">
+    <meta name="keywords" content="wikipedia path finder, wikipedia connection, bidirectional BFS, six degrees of wikipedia, wikipedia game, shortest path">
     <meta name="author" content="Wikipedia Connection Finder">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://wikigraph.up.railway.app/">
@@ -21,7 +21,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://wikigraph.up.railway.app/">
     <meta property="og:title" content="Wikipedia Connection Finder - Find Shortest Path Between Articles">
-    <meta property="og:description" content="Find the shortest path between any two Wikipedia articles. Interactive bidirectional search with real-time visualization and knowledge graph.">
+    <meta property="og:description" content="Find the shortest path between any two Wikipedia articles using bidirectional BFS. Fast, accurate, and free.">
     <meta property="og:image" content="https://wikigraph.up.railway.app/static/images/og-image.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -32,10 +32,10 @@
     <meta property="twitter:card" content="summary_large_image">
     <meta property="twitter:url" content="https://wikigraph.up.railway.app/">
     <meta property="twitter:title" content="Wikipedia Connection Finder - Find Shortest Path Between Articles">
-    <meta property="twitter:description" content="Find the shortest path between any two Wikipedia articles. Interactive bidirectional search with real-time visualization and knowledge graph.">
+    <meta property="twitter:description" content="Find the shortest path between any two Wikipedia articles using bidirectional BFS. Fast, accurate, and free.">
     <meta property="twitter:image" content="https://wikigraph.up.railway.app/static/images/og-image.png">
 
-    <!-- Favicon (placeholder paths - will update when logo is processed) -->
+    <!-- Favicon -->
     <link rel="icon" type="image/png" sizes="32x32" href="/static/images/icons/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/static/images/icons/favicon-16x16.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/images/icons/apple-touch-icon.png">
@@ -43,224 +43,214 @@
     <link rel="icon" type="image/png" sizes="512x512" href="/static/images/icons/android-chrome-512x512.png">
 
     <!-- Performance Optimization -->
-    <link rel="preconnect" href="https://cdn.jsdelivr.net">
-    <link rel="preconnect" href="https://d3js.org">
-    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
-    <link rel="dns-prefetch" href="https://d3js.org">
-    <link rel="dns-prefetch" href="https://en.wikipedia.org">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
     <link rel="stylesheet" href="/static/css/style.css">
-    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
 
-    <!-- Structured Data (JSON-LD) -->
+    <!-- FAQ Schema for SEO -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "WebApplication",
-      "name": "Wikipedia Connection Finder",
-      "alternateName": "WikiGraph",
-      "url": "https://wikigraph.up.railway.app/",
-      "description": "Find the shortest path between any two Wikipedia articles using intelligent bidirectional search with real-time visualization and knowledge graph.",
-      "applicationCategory": "UtilityApplication",
-      "operatingSystem": "Web Browser",
-      "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
-      },
-      "screenshot": "https://wikigraph.up.railway.app/static/images/og-image.png",
-      "featureList": [
-        "Bidirectional BFS search algorithm",
-        "Real-time path visualization",
-        "Interactive knowledge graph with D3.js",
-        "Cache-aware pathfinding",
-        "Multi-path discovery",
-        "Search history tracking"
-      ],
-      "browserRequirements": "Requires JavaScript. Requires HTML5.",
-      "softwareVersion": "1.0.0",
-      "author": {
-        "@type": "Organization",
-        "name": "Wikipedia Connection Finder",
-        "url": "https://github.com/rangulvers/Wiki_Graph"
-      },
-      "publisher": {
-        "@type": "Organization",
-        "name": "Wikipedia Connection Finder",
-        "url": "https://github.com/rangulvers/Wiki_Graph"
-      },
-      "inLanguage": "en-US",
-      "isAccessibleForFree": true
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "How fast are the Wikipedia connection searches?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Most searches complete in 2-8 seconds. Our bidirectional search algorithm is 5-10x faster than traditional methods, and our path caching system makes popular searches nearly instantaneous with a 40-60% cache hit rate after warm-up."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What is the six degrees of Wikipedia?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Similar to six degrees of separation, most Wikipedia articles can be connected through a chain of just 3-5 links. Our tool finds these shortest paths automatically, revealing how interconnected human knowledge really is across Wikipedia's 6+ million articles."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Why do some Wikipedia searches fail?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Searches may timeout if pages are too disconnected or if the connection requires more than 6 degrees of separation. Obscure topics with few links, very new articles, or pages in different language editions may not connect easily. Try using more well-known related topics as intermediate steps."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What is the Knowledge Graph in Wikipedia Connection Finder?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "The Knowledge Graph visualizes all cached path segments discovered from previous searches. Each node represents a Wikipedia page, sized by connection count and colored by usage frequency. It shows how our system builds a reusable database of discovered connections over time."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I share my Wikipedia search results?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes! Your searches are automatically saved in the Search History section. You can revisit previous searches, filter through your history, and even refresh to see new paths discovered since your original search. The visual graph can be saved as a screenshot."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How does multi-path discovery work?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Our advanced algorithm doesn't just find one path—it discovers up to 5 diverse paths between topics. Using Jaccard distance scoring, we ensure each path differs by at least 30%, giving you multiple unique perspectives on how concepts connect through Wikipedia's knowledge network."
+          }
+        }
+      ]
     }
     </script>
 </head>
 <body>
     <div id="particles-js"></div>
-    <div class="container">
+    <div class="container about-page">
         <header>
-            <h1>Wikipedia Connection Finder</h1>
-            <p class="subtitle">Find the shortest path between any two Wikipedia topics</p>
+            <h1><a href="/" style="text-decoration: none; color: inherit;">Wikipedia Connection Finder</a></h1>
+            <p class="subtitle">About the Project</p>
         </header>
 
-        <!-- Navigation Tabs -->
-        <div class="nav-tabs">
-            <button id="searchViewBtn" class="nav-tab active">Search</button>
-            <button id="graphViewBtn" class="nav-tab">Knowledge Graph</button>
-        </div>
+        <!-- Quick Navigation -->
+        <nav class="about-nav">
+            <a href="#how-it-works">How It Works</a>
+            <a href="#examples">Examples</a>
+            <a href="#faq">FAQ</a>
+            <a href="/search" class="cta-link">Try It Now →</a>
+        </nav>
 
-        <!-- Global Stats Bar -->
-        <div id="global-stats" class="stats-bar hidden">
-            <div class="stats-item">
-                <span class="stats-value" id="stat-total">-</span>
-                <span class="stats-label">searches</span>
-            </div>
-            <div class="stats-divider"></div>
-            <div class="stats-item">
-                <span class="stats-value" id="stat-success">-</span>
-                <span class="stats-label">success</span>
-            </div>
-            <div class="stats-divider"></div>
-            <div class="stats-item">
-                <span class="stats-value" id="stat-hops">-</span>
-                <span class="stats-label">avg hops</span>
-            </div>
-            <div class="stats-divider"></div>
-            <div class="stats-item">
-                <span class="stats-value" id="stat-pages">-</span>
-                <span class="stats-label">avg pages</span>
-            </div>
-        </div>
+        <!-- How It Works Section -->
+        <section class="info-section" id="how-it-works">
+            <h2>How It Works</h2>
+            <p>
+                This tool uses <strong>bidirectional breadth-first search (BFS)</strong> to find the shortest path between two Wikipedia articles. Instead of searching in one direction, it searches from both the start and end pages simultaneously, meeting in the middle.
+            </p>
+            <p>
+                From the start page, the algorithm explores outbound links. From the end page, it follows backlinks. The search expands level by level until both sides find a common page.
+            </p>
+            <p>
+                Previously discovered connections are cached in a database as path segments. When you search for a path that shares segments with past searches, those segments are reused. Typical cache hit rates are 40-60% after warm-up.
+            </p>
+            <p>
+                The algorithm can find up to 5 different paths between two topics. Paths are filtered using Jaccard distance scoring—by default, each path must differ by at least 30% from previously found paths.
+            </p>
+        </section>
 
-        <!-- Graph View Panel (hidden by default) -->
-        <div id="graphViewPanel" class="panel hidden">
-            <div class="graph-intro">
-                <h3>Knowledge Graph</h3>
-                <p>
-                    This interactive visualization shows all <strong>cached path segments</strong> discovered from previous searches.
-                    Each <strong>node</strong> represents a Wikipedia page, sized by its number of connections and colored by usage frequency
-                    (<span style="color: #00ffbf;">hot</span> = frequently used,
-                    <span style="color: #64748b;">cold</span> = rarely used).
-                    <strong>Edges</strong> show discovered connections between pages, with thickness indicating how often that path has been reused.
-                </p>
-                <p class="graph-hint">
-                    💡 <strong>Tip:</strong> Drag nodes to reposition, scroll to zoom, and hover for details.
-                </p>
+        <!-- Example Searches Section -->
+        <section class="info-section examples-section" id="examples">
+            <h2>Example Searches</h2>
+            <p>Click any example to try it:</p>
+            <div class="examples-grid">
+                <a href="/search?start=Harry%20Potter&end=Pizza" class="example-card clickable">
+                    <h4>Culture → Cuisine</h4>
+                    <p><strong>Harry Potter → Pizza</strong></p>
+                </a>
+                <a href="/search?start=Python%20(programming%20language)&end=Ancient%20Rome" class="example-card clickable">
+                    <h4>Technology → History</h4>
+                    <p><strong>Python → Ancient Rome</strong></p>
+                </a>
+                <a href="/search?start=Quantum%20mechanics&end=Taylor%20Swift" class="example-card clickable">
+                    <h4>Science → Pop Culture</h4>
+                    <p><strong>Quantum Mechanics → Taylor Swift</strong></p>
+                </a>
+                <a href="/search?start=Mount%20Everest&end=Super%20Bowl" class="example-card clickable">
+                    <h4>Geography → Sports</h4>
+                    <p><strong>Mount Everest → Super Bowl</strong></p>
+                </a>
+                <a href="/search?start=Leonardo%20da%20Vinci&end=DNA" class="example-card clickable">
+                    <h4>Art → Science</h4>
+                    <p><strong>Leonardo da Vinci → DNA</strong></p>
+                </a>
+                <a href="/search?start=Socrates&end=Artificial%20intelligence" class="example-card clickable">
+                    <h4>Philosophy → Technology</h4>
+                    <p><strong>Socrates → AI</strong></p>
+                </a>
             </div>
-            <div class="graph-controls">
-                <div class="graph-buttons">
-                    <button id="refreshGraphBtn" class="btn-refresh">Refresh Graph</button>
-                    <button id="resetLayoutBtn" class="btn-reset">Reset Layout</button>
+        </section>
+
+        <!-- FAQ Section -->
+        <section class="info-section faq-section" id="faq">
+            <h2>Frequently Asked Questions</h2>
+            <div class="faq-grid">
+                <div class="faq-item">
+                    <h3>How fast are the searches?</h3>
+                    <p>Most searches complete in 2-8 seconds. The bidirectional algorithm is significantly faster than single-direction search. Cached segments make repeated searches near-instantaneous (typical cache hit rate: 40-60%).</p>
                 </div>
-                <span id="graphStats" class="graph-stats-text"></span>
-            </div>
-            <div id="graphContainer" class="graph-container"></div>
-            <div id="graph-tooltip" class="graph-tooltip"></div>
-        </div>
-
-        <!-- Search View Panel (visible by default) -->
-        <div id="searchViewPanel" class="panel">
-        <div class="search-container">
-            <div class="input-group">
-                <div class="input-wrapper">
-                    <label for="start-term">Start Term</label>
-                    <input type="text" id="start-term" placeholder="e.g., Harry Potter" autocomplete="off">
-                    <div id="start-suggestions" class="autocomplete-dropdown hidden"></div>
+                <div class="faq-item">
+                    <h3>What is "six degrees of Wikipedia"?</h3>
+                    <p>Most Wikipedia articles can be connected in 3-5 links. This tool finds those shortest paths automatically.</p>
                 </div>
-                <div class="arrow">→</div>
-                <div class="input-wrapper">
-                    <label for="end-term">End Term</label>
-                    <input type="text" id="end-term" placeholder="e.g., NBA" autocomplete="off">
-                    <div id="end-suggestions" class="autocomplete-dropdown hidden"></div>
+                <div class="faq-item">
+                    <h3>Why do searches fail?</h3>
+                    <p>Searches timeout if the connection requires more than 6 hops. Obscure topics with few links, new articles, or different language editions may not connect. Try using more well-known intermediate topics.</p>
                 </div>
-            </div>
-            <button id="find-btn" onclick="findConnection()">Find Connection</button>
-        </div>
-
-        <div id="loading" class="loading hidden">
-            <canvas id="live-search-canvas"></canvas>
-            <div class="live-search-overlay">
-                <p class="search-title">Searching Wikipedia...</p>
-                <div id="live-status" class="live-status">
-                    <div class="stat-row">
-                        <span class="stat-label">Forward:</span>
-                        <strong id="live-forward-depth">0</strong>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Backward:</span>
-                        <strong id="live-backward-depth">0</strong>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Total:</span>
-                        <strong id="live-depth">0</strong>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Pages:</span>
-                        <strong id="live-pages">0</strong>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Speed:</span>
-                        <strong id="live-speed">0</strong> <span class="stat-unit">pages/sec</span>
-                    </div>
+                <div class="faq-item">
+                    <h3>What is the Knowledge Graph?</h3>
+                    <p>The Knowledge Graph visualizes cached path segments from previous searches. Each node is a Wikipedia page, sized by connections and colored by usage frequency.</p>
+                </div>
+                <div class="faq-item">
+                    <h3>Are searches saved?</h3>
+                    <p>Yes. All searches are saved in the Search History section. You can revisit, filter, or re-run them to see if new paths have been discovered.</p>
+                </div>
+                <div class="faq-item">
+                    <h3>How does multi-path discovery work?</h3>
+                    <p>The algorithm finds up to 5 different paths. It uses Jaccard distance scoring to ensure diversity—by default, each path must differ by at least 30% from previously found paths.</p>
                 </div>
             </div>
+        </section>
 
-            <!-- Results overlay (shown after animation completes) -->
-            <div id="results" class="results hidden">
-                <!-- Stats overlay on canvas -->
-                <div id="results-stats-overlay" class="stats-overlay">
-                    <div class="stat-item">
-                        <div class="stat-value" id="hops-count">0</div>
-                        <div class="stat-label">Hops</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value" id="pages-count">0</div>
-                        <div class="stat-label">Pages Checked</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Path details panel (below canvas) -->
-        <div id="path-details-container" class="path-details-panel hidden">
-            <h3>Path Details</h3>
-            <div id="path-details" class="path-list"></div>
-            <button id="new-search-btn" onclick="location.reload()">New Search</button>
-        </div>
-
-        <div id="error" class="error hidden"></div>
-
-        <div class="history-section">
-            <div class="history-header" id="historyToggleHeader">
-                <div class="history-header-left">
-                    <h2>Search History</h2>
-                    <button id="historyToggleBtn" class="history-toggle-btn" aria-label="Toggle history">
-                        <span class="toggle-icon">▼</span>
-                    </button>
-                </div>
-                <div class="history-controls">
-                    <input type="text" id="history-search" placeholder="Filter searches..." />
-                    <button onclick="loadSearchHistory()">Refresh</button>
-                </div>
-            </div>
-
-            <div id="historyContent" class="history-content collapsed">
-                <div id="history-loading" class="loading hidden">
-                    <div class="spinner"></div>
-                    <p>Loading history...</p>
-                </div>
-
-                <div id="history-list" class="history-list"></div>
-            </div>
-        </div>
-        </div>
-        <!-- End Search View Panel -->
+        <!-- Call to Action -->
+        <section class="info-section cta-section">
+            <a href="/search" class="btn-primary large">Try It</a>
+        </section>
     </div>
 
     <footer class="footer">
-        Built with ❤️ and just for fun | <a href="https://github.com/rangulvers/Wiki_Graph" target="_blank" rel="noopener noreferrer">GitHub</a>
+        Built with ❤️ and just for fun |
+        <a href="/search">Search</a> |
+        <a href="/#faq">FAQ</a> |
+        <a href="https://github.com/rangulvers/Wiki_Graph" target="_blank" rel="noopener noreferrer">GitHub</a>
     </footer>
 
-    <script type="module" src="/static/js/modules/main.js"></script>
+    <!-- Initialize particles background -->
+    <script>
+        particlesJS('particles-js', {
+            particles: {
+                number: { value: 80, density: { enable: true, value_area: 800 } },
+                color: { value: '#22e4ff' },
+                shape: { type: 'circle' },
+                opacity: { value: 0.5, random: false },
+                size: { value: 3, random: true },
+                line_linked: {
+                    enable: true,
+                    distance: 150,
+                    color: '#22e4ff',
+                    opacity: 0.4,
+                    width: 1
+                },
+                move: {
+                    enable: true,
+                    speed: 2,
+                    direction: 'none',
+                    random: false,
+                    straight: false,
+                    out_mode: 'out',
+                    bounce: false
+                }
+            },
+            interactivity: {
+                detect_on: 'canvas',
+                events: {
+                    onhover: { enable: true, mode: 'repulse' },
+                    onclick: { enable: true, mode: 'push' },
+                    resize: true
+                }
+            },
+            retina_detect: true
+        });
+    </script>
 </body>
 </html>

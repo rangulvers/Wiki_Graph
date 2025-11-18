@@ -71,6 +71,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Security headers middleware
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://d3js.org https://www.googletagmanager.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data: https:; "
+        "connect-src 'self' https://en.wikipedia.org https://www.google-analytics.com; "
+        "frame-ancestors 'none';"
+    )
+    return response
+
 # Templates
 templates = Jinja2Templates(directory="templates")
 
@@ -1079,8 +1098,19 @@ class WikipediaPathFinder:
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    """Serve the main HTML page"""
+    """Serve the landing/about page"""
     return templates.TemplateResponse("index.html", {"request": request})
+
+@app.get("/search", response_class=HTMLResponse)
+async def search_page(request: Request):
+    """Serve the main search tool page"""
+    return templates.TemplateResponse("search.html", {"request": request})
+
+@app.get("/about", response_class=HTMLResponse)
+async def about_redirect(request: Request):
+    """Redirect /about to / for backwards compatibility"""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/", status_code=301)
 
 
 @app.get("/robots.txt", response_class=PlainTextResponse)
