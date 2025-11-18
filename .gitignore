@@ -30,11 +30,19 @@ Thumbs.db
 # Database
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
 
+# Data directory (runtime data)
+data/
 
+# Claude Code settings (user-specific)
+.claude/
 
-.claude
-CLAUDE.md
-backend/
-frontend/
-docs/
+Claude.md
+
+start.sh
+
+/docs
+# Keep CLAUDE.md in root but ignore old structure
+# (backend/ and frontend/ are removed, docs/ is now tracked)

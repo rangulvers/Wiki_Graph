@@ -4,4 +4,4 @@
 source .venv/bin/activate
 
 # Start Flask server
-python app.py
+python app/main.py

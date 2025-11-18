@@ -10,33 +10,23 @@ import httpx
 from collections import deque
 import time
 import json
-import database
 import asyncio
 import re
 from typing import Optional, TypeVar, Callable, Any, List
 from functools import wraps
 import logging
-from models import (
+
+from app import database
+from app.models import (
     SearchRequest, SearchResponse, SearchErrorResponse,
     Node, Edge
 )
-from path_cache import get_cache
+from app.cache import get_cache
+from app.config import API_TITLE, API_VERSION, CORS_ORIGINS
+from app.utils import normalize_title
 
 # Type variable for generic async function decorator
 T = TypeVar('T')
-
-# Helper function for title normalization (used for cache keys)
-def normalize_title(title: str) -> str:
-    """
-    Normalize Wikipedia title for consistent cache keys
-
-    Args:
-        title: Wikipedia page title
-
-    Returns:
-        Normalized title (lowercase, spaces instead of underscores)
-    """
-    return title.strip().replace("_", " ").lower()
 
 # Configure structured logging
 logging.basicConfig(
@@ -52,7 +42,7 @@ logger = logging.getLogger(__name__)
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address)
 
-app = FastAPI(title="Wikipedia Path Finder API", version="1.0.0")
+app = FastAPI(title=API_TITLE, version=API_VERSION)
 
 # Add rate limit exception handler
 app.state.limiter = limiter
@@ -61,11 +51,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # CORS middleware - restrict to specific origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-        "https://wikigraph.up.railway.app"
-    ],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
@@ -82,7 +68,7 @@ async def add_security_headers(request, call_next):
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
         "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://d3js.org https://www.googletagmanager.com; "
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
         "font-src 'self' https://fonts.gstatic.com; "
         "img-src 'self' data: https:; "
         "connect-src 'self' https://en.wikipedia.org https://www.google-analytics.com; "
@@ -1209,7 +1195,7 @@ async def find_path_endpoint(request: Request, search_request: SearchRequest, ti
         # Create PathInfo objects for all paths if multiple
         path_infos = None
         if paths and len(paths) > 1:
-            from models import PathInfo
+            from app.models import PathInfo
             path_infos = []
             for idx, p in enumerate(paths):
                 p_nodes = [Node(id=i, label=page, title=page) for i, page in enumerate(p)]
@@ -1228,7 +1214,7 @@ async def find_path_endpoint(request: Request, search_request: SearchRequest, ti
                 segment_sources_list = None
                 cache_effectiveness = None
                 if idx == 0 and cache_info.get('segment_sources'):
-                    from models import SegmentSource
+                    from app.models import SegmentSource
                     segment_sources_list = [
                         SegmentSource(**seg) for seg in cache_info.get('segment_sources', [])
                     ]

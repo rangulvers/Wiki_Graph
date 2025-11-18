@@ -1,30 +1,12 @@
 import sqlite3
 import json
 import time
-import os
 from datetime import datetime
 from contextlib import contextmanager
+from app.config import DATABASE_PATH
 
-# Flexible data directory: Railway uses /data, local uses ./data
-# Railway sets RAILWAY_ENVIRONMENT_NAME variable
-if os.environ.get('RAILWAY_ENVIRONMENT_NAME'):
-    DATA_DIR = '/data'
-else:
-    DATA_DIR = os.environ.get('DATA_DIR', './data')
-
-# Create directory if it doesn't exist (and we have permissions)
-try:
-    os.makedirs(DATA_DIR, exist_ok=True)
-except OSError as e:
-    # If /data is read-only (shouldn't happen on Railway), fallback to ./data
-    if DATA_DIR == '/data':
-        print(f"Warning: Could not create {DATA_DIR}, falling back to ./data: {e}")
-        DATA_DIR = './data'
-        os.makedirs(DATA_DIR, exist_ok=True)
-    else:
-        raise
-
-DATABASE_NAME = os.path.join(DATA_DIR, 'wikipedia_searches.db')
+# Use database path from config
+DATABASE_NAME = str(DATABASE_PATH)
 
 @contextmanager
 def get_db():

@@ -10,8 +10,8 @@ This module provides in-memory caching of path segments with:
 from collections import OrderedDict
 from typing import Optional, List, Tuple
 import threading
-import database
 import logging
+from app import database
 
 logger = logging.getLogger(__name__)
 
