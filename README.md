@@ -24,6 +24,11 @@ A modern web application that finds the shortest path between any two Wikipedia 
 - **📊 Interactive Search Results**: Canvas-based visualization with clickable nodes
 - **🎨 Particle Animations**: Beautiful convergence and path reveal effects
 - **🎯 Modern Glass-Morphism UI**: Cyan-accented dark theme with smooth transitions
+- **📤 Social Media Sharing**: One-click sharing with auto-generated screenshots
+  - Native share dialog on mobile (iOS/Android)
+  - Auto-generated share text with stats
+  - Branded watermark on screenshots
+  - Multi-platform clipboard support
 
 ### Smart Features
 - **💾 LRU Path Cache**: In-memory + SQLite persistence with 10,000 segment capacity
@@ -58,6 +63,8 @@ python app.py
 - D3.js v7 (force-directed graph visualization)
 - Canvas API (search visualization & animations)
 - Server-Sent Events (real-time updates)
+- html2canvas (screenshot capture for sharing)
+- Web Share API (native mobile sharing)
 
 **Architecture**:
 - LRU cache with database persistence
@@ -96,6 +103,30 @@ The cache-aware pathfinding system dramatically speeds up searches:
 
 **Example**: After finding "Harry Potter → Laptop", future searches can reuse segments like "Harry Potter → Alfonso Cuarón" or "Apple Inc. → Laptop"
 
+## 📤 Social Media Sharing
+
+Share your discoveries with a single click! The sharing feature captures your complete path visualization and generates ready-to-post content.
+
+### Features
+- **📸 Auto Screenshot**: Captures canvas with all paths, stats, and branded watermark
+- **📱 Native Sharing**:
+  - Mobile: Opens native share sheet (Twitter, LinkedIn, Messages, etc.)
+  - Desktop: Downloads image + copies text to clipboard
+- **✍️ Smart Text Generation**: Auto-creates share text with stats
+  - Example: *"I found 3 paths between 'NBA' and 'Taylor Swift' on Wikipedia! 4 hops, 156 pages checked. Check it out at https://wikigraph.up.railway.app"*
+- **🔄 Multi-Platform Support**:
+  - Web Share API for mobile devices
+  - Clipboard API with legacy fallback
+  - Modal popup if clipboard fails
+- **🎨 Branded Watermark**: Subtle "wikigraph.up.railway.app" branding on screenshots
+
+### How to Use
+1. Run a search and view results
+2. Click the **Share** button in the top-right of the stats overlay
+3. On mobile: Select your preferred app from the share sheet
+4. On desktop: Image downloads and text copies to clipboard
+5. Post to social media with your screenshot and caption!
+
 ## 🌐 Deployment
 
 Push to GitHub and connect to Railway - auto-deployment configured via `railway.json` and `Procfile`.
@@ -106,17 +137,33 @@ The app uses Railway's persistent `/data` directory for SQLite database storage,
 
 ```
 Wiki_Graph/
-├── app.py                    # Main FastAPI application
-├── database.py              # SQLite operations (searches, cache)
-├── path_cache.py           # LRU cache with DB persistence
-├── models.py               # Pydantic models
+├── app/
+│   ├── main.py              # Main FastAPI application
+│   ├── database.py          # SQLite operations (searches, cache)
+│   ├── cache.py             # LRU cache with DB persistence
+│   ├── models.py            # Pydantic models
+│   ├── config.py            # Configuration management
+│   └── utils.py             # Helper functions
 ├── static/
-│   ├── css/style.css       # Modern glass-morphism UI
+│   ├── css/style.css        # Modern glass-morphism UI
+│   ├── images/              # Icons and assets
 │   └── js/
-│       ├── graphView.js    # D3.js knowledge graph
-│       └── modules/        # ES6 modules (search, history, etc.)
+│       ├── graphView.js     # D3.js knowledge graph
+│       └── modules/         # ES6 modules
+│           ├── main.js              # Entry point
+│           ├── searchApi.js         # Search orchestration & SSE
+│           ├── shareManager.js      # Social media sharing
+│           ├── SearchParticles.js   # Canvas animations
+│           ├── PathNode.js          # Node rendering
+│           ├── autocomplete.js      # Wikipedia suggestions
+│           ├── historyManager.js    # Search history
+│           ├── statsManager.js      # Statistics display
+│           └── utils.js             # Shared utilities
 ├── templates/
-│   └── index.html          # Single-page application
+│   ├── index.html           # Landing/about page
+│   └── search.html          # Search application
+├── tests/                   # Test suite
+├── docs/                    # Documentation
 └── data/
     └── wikipedia_searches.db  # SQLite database (persistent)
 ```
