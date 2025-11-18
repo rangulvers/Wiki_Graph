@@ -45,7 +45,7 @@ cd Wiki_Graph
 pip install -r requirements.txt
 
 # Run locally
-python app.py
+uvicorn app.main:app --reload
 
 # Open browser at http://localhost:8000
 ```
@@ -118,7 +118,6 @@ Share your discoveries with a single click! The sharing feature captures your co
   - Web Share API for mobile devices
   - Clipboard API with legacy fallback
   - Modal popup if clipboard fails
-- **🎨 Branded Watermark**: Subtle "wikigraph.up.railway.app" branding on screenshots
 
 ### How to Use
 1. Run a search and view results
@@ -127,58 +126,6 @@ Share your discoveries with a single click! The sharing feature captures your co
 4. On desktop: Image downloads and text copies to clipboard
 5. Post to social media with your screenshot and caption!
 
-## 🌐 Deployment
-
-Push to GitHub and connect to Railway - auto-deployment configured via `railway.json` and `Procfile`.
-
-The app uses Railway's persistent `/data` directory for SQLite database storage, ensuring cached segments survive deployments.
-
-## 🗂️ Project Structure
-
-```
-Wiki_Graph/
-├── app/
-│   ├── main.py              # Main FastAPI application
-│   ├── database.py          # SQLite operations (searches, cache)
-│   ├── cache.py             # LRU cache with DB persistence
-│   ├── models.py            # Pydantic models
-│   ├── config.py            # Configuration management
-│   └── utils.py             # Helper functions
-├── static/
-│   ├── css/style.css        # Modern glass-morphism UI
-│   ├── images/              # Icons and assets
-│   └── js/
-│       ├── graphView.js     # D3.js knowledge graph
-│       └── modules/         # ES6 modules
-│           ├── main.js              # Entry point
-│           ├── searchApi.js         # Search orchestration & SSE
-│           ├── shareManager.js      # Social media sharing
-│           ├── SearchParticles.js   # Canvas animations
-│           ├── PathNode.js          # Node rendering
-│           ├── autocomplete.js      # Wikipedia suggestions
-│           ├── historyManager.js    # Search history
-│           ├── statsManager.js      # Statistics display
-│           └── utils.js             # Shared utilities
-├── templates/
-│   ├── index.html           # Landing/about page
-│   └── search.html          # Search application
-├── tests/                   # Test suite
-├── docs/                    # Documentation
-└── data/
-    └── wikipedia_searches.db  # SQLite database (persistent)
-```
-
-## 🎯 API Endpoints
-
-- `GET /` - Main application
-- `POST /find-path` - Non-streaming search
-- `POST /find-path-stream` - SSE streaming search
-- `GET /api/searches` - Search history with filtering
-- `GET /api/searches/{id}` - Individual search details
-- `GET /api/stats` - Global statistics
-- `GET /api/cache/stats` - Cache performance metrics
-- `GET /api/cache/graph` - Knowledge graph data (nodes & edges)
-- `GET /api/cache/effectiveness` - Cache utilization details
 
 ## 📝 License
 
